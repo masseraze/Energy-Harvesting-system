@@ -1,0 +1,956 @@
+C51 COMPILER V9.60.0.0   COMBINE                                                           09/15/2021 22:09:36 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE COMBINE
+OBJECT MODULE PLACED IN .\Output\combine.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE ..\combine.c OPTIMIZE(7,SPEED) BROWSE INCDIR(..\Library\Device\Include;.
+                    -.\Library\StdDriver\inc) DEBUG OBJECTEXTEND PRINT(.\List\combine.lst) TABS(2) OBJECT(.\Output\combine.obj)
+
+line level    source
+
+   1          #include "ML51.H" 
+   2          #include <string.h>
+   3          #define Sint8  signed   char
+   4          #define Uint8  unsigned char
+   5          #define Uint16 unsigned int
+   6          #define Uint32 unsigned long
+   7          unsigned int xdata ADCdataAIN;
+   8                   int VREF=5;       
+   9          /*********************************************************************
+  10          ** Define address
+  11          *********************************************************************/
+  12          //TC72
+  13          #define Adr_R               0x00
+  14          #define Adr_W               0x80
+  15          #define Adr_TMSB            0x02
+  16          #define Adr_TLSB            0x01
+  17          #define Shotdown            0x05
+  18          #define OneShot             0x15
+  19          /*********************************************************************
+  20          **  I/O Declaration
+  21          *********************************************************************/
+  22          /*
+  23          //thermal
+  24          #define PWM     P15     
+  25          #define SCK     P31     
+  26          #define SCS1    P24     
+  27          #define SDIO    P30     
+  28          #define SCS2    P20     
+  29          #define SDI     P25
+  30          #define SCS3    P23
+  31          //power allocate
+  32          #define ADC     P21
+  33          #define TURN    P14
+  34          #define EN      P22
+  35          //LCD
+  36          #define SDIN    P00
+  37          #define SCLK    P01
+  38          #define DC      P02
+  39          #define RES     P03
+  40          #define CS      P52
+  41          */
+  42          
+  43          #define SDIN    P00  //LCD
+  44          #define SCLK    P01  //LCD
+  45          #define DC      P02  //LCD
+  46          #define RES     P03  //LCD
+  47          
+  48          #define TURN    P14   //power
+  49          #define PWM     P15   //thermal
+  50          
+  51          #define SCS2    P20   //thermal
+  52          #define ADC     P21  //power allocate  I
+  53          #define EN      P22  //power allocate
+  54          #define SCS3    P23   //thermal
+C51 COMPILER V9.60.0.0   COMBINE                                                           09/15/2021 22:09:36 PAGE 2   
+
+  55          #define SCS1    P24   //thermal  
+  56          #define SDI     P25   //thermal
+  57          
+  58          #define SDIO    P30   //thermal        I
+  59          #define SCK     P31   //thermal 
+  60          
+  61          #define CS      P52  //LCD
+  62          //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+  63          //  Global Variables
+  64          //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+  65          #define XLevelL   0x00
+  66          #define XLevelH   0x10
+  67          #define XLevel    ((XLevelH&0x0F)*16+XLevelL)
+  68          #define Max_Column  128
+  69          #define Max_Row   64
+  70          #define Brightness  0xBF
+  71          /*********************************************************************
+  72          **  LCD pattern display
+  73          *********************************************************************/
+  74          unsigned char code LCD_basic[][19]={
+  75            0x00,0x00,0x7E,0x11,0x11,0x11,0x7E,0x00,0x01,0x01,0x7F,0x01,0x01,0x00,0x00,0x36,0x36,0x00,0x00,
+  76            0x00,0x00,0x01,0x01,0x7F,0x01,0x01,0x00,0x7F,0x08,0x08,0x08,0x7F,0x00,0x00,0x36,0x36,0x00,0x00,
+  77            0x00,0x00,0x01,0x01,0x7F,0x01,0x01,0x00,0x3E,0x41,0x41,0x41,0x22,0x00,0x00,0x36,0x36,0x00,0x00,
+  78            0x00,0x60,0x58,0x46,0x43,0x46,0x58,0x60,0x01,0x01,0x7F,0x01,0x01,0x00,0x00,0x36,0x36,0x00,0x00,
+  79          };
+  80          unsigned char code Watt_basic[][6]={
+  81            0x7E,0x11,0x11,0x11,0x7E,0x00,//A
+  82            0x7C,0x04,0x18,0x04,0x7C,0x00,//m
+  83            0x7C,0x14,0x14,0x14,0x08,0x00,//p
+  84            0x00,0x36,0x36,0x00,0x00,0x00,//:
+  85            0x7F,0x49,0x49,0x49,0x41,0x00,//E
+  86            0x7F,0x08,0x08,0x08,0x7F,0x00,//H
+  87            0x00,0x00,0x00,0x00,0x00,0x00,//space
+  88            0x3F,0x40,0x38,0x40,0x3F,0x00,//W
+  89            0x20,0x54,0x54,0x54,0x78,0x00,//a
+  90            0x04,0x3F,0x44,0x40,0x20,0x00,//t
+  91            0x04,0x3F,0x44,0x40,0x20,0x00,//t
+  92            0x00,0x36,0x36,0x00,0x00,0x00,//:
+  93            0x38,0x44,0x44,0x44,0x20,0X00,//c
+  94            0x7F,0x08,0x04,0x04,0x78,0x00,//h
+  95            0x20,0x54,0x54,0x54,0x78,0x00,//a
+  96            0x7C,0x08,0x04,0x04,0x08,0x00,//r
+  97            0x38,0x44,0x44,0x44,0xF8,0x00,//g
+  98            0x38,0x54,0x54,0x54,0x18,0x00,//e
+  99            0x38,0x44,0x44,0x48,0x7F,0x00,//d
+ 100            0x00,0x36,0x36,0x00,0x00,0x00,//:
+ 101            0x01,0x02,0x02,0x02,0x01,0x00,//g con
+ 102          };
+ 103          unsigned char code Watt_unit[][6]={
+ 104            0x7C,0x04,0x18,0x04,0x7C,0x00,//m
+ 105            0x7E,0x11,0x11,0x11,0x7E,0x00,//A
+ 106            0x7E,0x05,0x18,0x04,0x7C,0x00,//m+g
+ 107            0x7E,0x11,0x11,0x11,0x7E,0x00,//A
+ 108            0x7F,0x08,0x04,0x04,0x78,0x00,//h
+ 109            0x7C,0x04,0x18,0x04,0x7C,0x00,//m 
+ 110            0x3F,0x40,0x38,0x40,0x3F,0x00,//W
+ 111            0x01,0x02,0x02,0x02,0x01,0x00,
+ 112            0x07,0x05,0x07,0x00,0x3E,0x41,//oC
+ 113            0x41,0x41,0x22,0x00,0x00,0x00,
+ 114          };
+ 115          unsigned char code number[][5]={
+ 116            {0x3E,0x51,0x49,0x45,0x3E},   //   ( 16)  0 - 0x0030 Digit Zero
+C51 COMPILER V9.60.0.0   COMBINE                                                           09/15/2021 22:09:36 PAGE 3   
+
+ 117            {0x00,0x42,0x7F,0x40,0x00},   //   ( 17)  1 - 0x0031 Digit One
+ 118            {0x42,0x61,0x51,0x49,0x46},   //   ( 18)  2 - 0x0032 Digit Two
+ 119            {0x21,0x41,0x45,0x4B,0x31},   //   ( 19)  3 - 0x0033 Digit Three
+ 120            {0x18,0x14,0x12,0x7F,0x10},   //   ( 20)  4 - 0x0034 Digit Four
+ 121            {0x27,0x45,0x45,0x45,0x39},   //   ( 21)  5 - 0x0035 Digit Five
+ 122            {0x3C,0x4A,0x49,0x49,0x30},   //   ( 22)  6 - 0x0036 Digit Six
+ 123            {0x01,0x71,0x09,0x05,0x03},   //   ( 23)  7 - 0x0037 Digit Seven
+ 124            {0x36,0x49,0x49,0x49,0x36},   //   ( 24)  8 - 0x0038 Digit Eight
+ 125            {0x06,0x49,0x49,0x29,0x1E},   //   ( 25)  9 - 0x0039 Dight Nine
+ 126            {0x00,0x60,0x60,0x00,0x00},   //   ( 14)  . - 0x002E Full Stop
+ 127            {0x00,0x00,0x00,0x00,0x00},
+ 128          };
+ 129          /*********************************************************************
+ 130          **  Variable Declaration
+ 131          *********************************************************************/
+ 132          Uint16 i;//for first  loop counting
+ 133          Uint16 j;//for second loop counting
+ 134          unsigned char idata *Src_Pointer;//retrieve pointer dataa
+ 135          
+ 136          //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ 137          //  Delay Time
+ 138          //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ 139          void uDelay(unsigned char l)
+ 140          {
+ 141   1        while(l--);
+ 142   1      }
+ 143          
+ 144          
+ 145          void Delay(unsigned char n)
+ 146          {
+ 147   1      unsigned char i,j,k;
+ 148   1      
+ 149   1        for(k=0;k<n;k++)
+ 150   1        {
+ 151   2          for(i=0;i<131;i++)
+ 152   2          {
+ 153   3            for(j=0;j<15;j++)
+ 154   3            {
+ 155   4              uDelay(203);  
+ 156   4            }
+ 157   3          }
+ 158   2        }
+ 159   1      }
+ 160          
+ 161          
+ 162          
+ 163          //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ 164          //  Read/Write Sequence
+ 165          //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ 166          void Write_Command(unsigned char Data)
+ 167          {
+ 168   1        P5&=0xFB;//CS(P52)=0;
+ 169   1        DC=0;
+ 170   1        for (i=0; i<8; i++)
+ 171   1        {
+ 172   2          SCLK=0;//P1 & 0x80
+ 173   2          SDIN=(Data&0x80)>>7;
+ 174   2          Data = Data << 1;
+ 175   2          _nop_();
+ 176   2          //uDelay(1);
+ 177   2          SCLK=1;
+ 178   2          _nop_();
+C51 COMPILER V9.60.0.0   COMBINE                                                           09/15/2021 22:09:36 PAGE 4   
+
+ 179   2          //uDelay(1);
+ 180   2        }
+ 181   1        SCLK=0;
+ 182   1        DC=1;
+ 183   1        P5|=0x04;//CS(P52)=1;
+ 184   1      }
+ 185          
+ 186          
+ 187          void Write_Data(unsigned char Data)
+ 188          {
+ 189   1        P5&=0xFB;//CS(P52)=0;
+ 190   1        DC=1;
+ 191   1        for (i=0; i<8; i++)
+ 192   1        {
+ 193   2          SCLK=0;
+ 194   2          SDIN=(Data&0x80)>>7;
+ 195   2          Data = Data << 1;
+ 196   2          _nop_();
+ 197   2          //uDelay(1);
+ 198   2          SCLK=1;
+ 199   2          _nop_();
+ 200   2          //uDelay(1);
+ 201   2        }
+ 202   1        SCLK=0;
+ 203   1        DC=1;
+ 204   1        P5|=0x04;//CS(P52)=1;
+ 205   1      }
+ 206          //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ 207          //  Show Regular Pattern (Full Screen)
+ 208          //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ 209          void Fill_RAM(unsigned char Data)
+ 210          {
+ 211   1      unsigned char i,j;
+ 212   1      
+ 213   1        for(i=0;i<8;i++)
+ 214   1        {
+ 215   2          //Instruction_Setting('I',i,0x00);//Set_Start_Page(i);
+ 216   2          Write_Command(0xB0|i);
+ 217   2          //Instruction_Setting('A',0x00,0x00);//Set_Start_Column(0x00);
+ 218   2          Write_Command(0x00);
+ 219   2          Write_Command(0x10);
+ 220   2          
+ 221   2          for(j=0;j<128;j++)
+ 222   2          {
+ 223   3            Write_Data(Data);
+ 224   3          }
+ 225   2        }
+ 226   1      }
+ 227          //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ 228          //  Show Frame (Full Screen)
+ 229          //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ 230          void Frame()
+ 231          {
+ 232   1      unsigned char i,j;
+ 233   1        //top line
+ 234   1        //Instruction_Setting('I',0x00,0x00);//Set_Start_Page(0x00);
+ 235   1        //Instruction_Setting('A',XLevel,0x00);//Set_Start_Column(XLevel);
+ 236   1        
+ 237   1        Write_Command(0xB0|0x00);
+ 238   1        
+ 239   1        Write_Command(0x00);
+ 240   1        Write_Command(0x10);
+C51 COMPILER V9.60.0.0   COMBINE                                                           09/15/2021 22:09:36 PAGE 5   
+
+ 241   1        
+ 242   1        for(i=0;i<Max_Column;i++)
+ 243   1        {
+ 244   2          Write_Data(0x01);
+ 245   2        }
+ 246   1        //button line
+ 247   1        //Instruction_Setting('I',0x07,0x00);//Set_Start_Page(0x07);
+ 248   1        //Instruction_Setting('A',XLevelL,0x00);//Set_Start_Column(XLevel);
+ 249   1        
+ 250   1        Write_Command(0xB0|0x07);
+ 251   1        
+ 252   1        Write_Command(0x00);
+ 253   1        Write_Command(0x10);
+ 254   1        
+ 255   1        for(i=0;i<Max_Column;i++)
+ 256   1        {
+ 257   2          Write_Data(0x80);
+ 258   2        }
+ 259   1        
+ 260   1        for(i=0;i<8;i++)
+ 261   1        {
+ 262   2          //Instruction_Setting('I',i,0x00);//Set_Start_Page(i);
+ 263   2          Write_Command(0xB0|i);
+ 264   2          
+ 265   2          for(j=0;j<Max_Column;j+=(Max_Column-1))
+ 266   2          {
+ 267   3            //Instruction_Setting('A',XLevel+j,0x00);//Set_Start_Column(XLevel+j);
+ 268   3            Write_Command(0x00+(XLevel+j)%16);
+ 269   3            Write_Command(0x10+(XLevel+j)/16);
+ 270   3            Write_Data(0xFF);
+ 271   3          }
+ 272   2        }
+ 273   1      }
+ 274          
+ 275          
+ 276          
+ 277          //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ 278          //  Show Pattern (Partial or Full Screen)
+ 279          //
+ 280          //    a: Start Page
+ 281          //    b: End Page
+ 282          //    c: Start Column
+ 283          //    d: Total Columns
+ 284          //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ 285          void Show_Pattern(unsigned char *Data_Pointer, unsigned char a, unsigned char b, unsigned char c, unsigned
+             - char d)
+ 286          {
+ 287   1      unsigned char i,j;
+ 288   1      
+ 289   1        for(i=a;i<(b+1);i++)
+ 290   1        {
+ 291   2          Write_Command(0xB0|i);
+ 292   2          
+ 293   2          Write_Command(0x00+c%16);
+ 294   2          Write_Command(0x10+c/16);
+ 295   2          
+ 296   2          for(j=0;j<d;j++)
+ 297   2          {
+ 298   3            Write_Data(*Data_Pointer);
+ 299   3            Data_Pointer++;
+ 300   3          }
+ 301   2        }
+C51 COMPILER V9.60.0.0   COMBINE                                                           09/15/2021 22:09:36 PAGE 6   
+
+ 302   1      }
+ 303          void show_data(Uint16 D1,unsigned char RC){
+ 304   1        Uint16 buff;
+ 305   1        unsigned char j;
+ 306   1      
+ 307   1        Write_Command(0xB0|RC);//page
+ 308   1      
+ 309   1        Write_Command(0x00+(0x15)%16);
+ 310   1        Write_Command(0x10+(0x15)/16);
+ 311   1        buff=D1/100;//quotient
+ 312   1        if(buff!=0){
+ 313   2          for(j=0;j<5;j++)
+ 314   2          {
+ 315   3            Write_Data(number[buff][j]);  
+ 316   3          }
+ 317   2        }
+ 318   1        Write_Command(0x00+(0x1B)%16);
+ 319   1        Write_Command(0x10+(0x1B)/16);
+ 320   1        D1=D1-buff*100;
+ 321   1        buff=D1/10;//printf("buff=%d\n",buff);
+ 322   1        for(j=0;j<5;j++)
+ 323   1        {
+ 324   2          Write_Data(number[buff][j]);  
+ 325   2        }
+ 326   1        Write_Command(0x00+(0x21)%16);
+ 327   1        Write_Command(0x10+(0x21)/16);
+ 328   1        buff=D1%10;//printf("buff=%d\n",buff);
+ 329   1        for(j=0;j<5;j++)
+ 330   1        {
+ 331   2          Write_Data(number[buff][j]);  
+ 332   2        }
+ 333   1      }
+ 334          
+ 335          void show_mA(float f1){
+ 336   1        Uint16 ff;
+ 337   1        unsigned char j;
+ 338   1      
+ 339   1        Write_Command(0xB0|0x02);//page mA
+ 340   1      
+ 341   1        Write_Command(0x00+(0x55)%16);
+ 342   1        Write_Command(0x10+(0x55)/16);
+ 343   1        ff=f1/100;//quotient
+ 344   1        if(ff!=0){
+ 345   2          for(j=0;j<5;j++)
+ 346   2          {
+ 347   3            Write_Data(number[ff][j]);  
+ 348   3          }
+ 349   2        }
+ 350   1        Write_Data(0x00);
+ 351   1        f1=f1-ff*100;
+ 352   1        ff=f1/10;//printf("buff=%d\n",ff);
+ 353   1        for(j=0;j<5;j++)
+ 354   1        {
+ 355   2          Write_Data(number[ff][j]);  
+ 356   2        }
+ 357   1        Write_Data(0x00);
+ 358   1        f1=f1-ff*10;
+ 359   1        ff=f1/1;//printf("buff=%d\n",ff);
+ 360   1        for(j=0;j<5;j++)
+ 361   1        {
+ 362   2          Write_Data(number[ff][j]);  
+ 363   2        }
+C51 COMPILER V9.60.0.0   COMBINE                                                           09/15/2021 22:09:36 PAGE 7   
+
+ 364   1        Write_Data(0x00);
+ 365   1        Write_Data(0x60);//dot
+ 366   1        Write_Data(0x60);//dot
+ 367   1        Write_Data(0x00);
+ 368   1        f1=f1-ff;
+ 369   1        ff=f1/0.1;//printf("buff=%d\n",buff);
+ 370   1        for(j=0;j<5;j++)
+ 371   1        {
+ 372   2          Write_Data(number[ff][j]);  
+ 373   2        }
+ 374   1      }
+ 375          
+ 376          void show_mW(float f1,unsigned char RC){
+ 377   1        Uint16 ff;
+ 378   1        unsigned char j;
+ 379   1      
+ 380   1        Write_Command(0xB0|RC);//page mA
+ 381   1      
+ 382   1        Write_Command(0x00+(0x3D)%16);
+ 383   1        Write_Command(0x10+(0x3D)/16);
+ 384   1        ff=f1/100;//quotient
+ 385   1        if(ff!=0){
+ 386   2          for(j=0;j<5;j++)
+ 387   2          {
+ 388   3            Write_Data(number[ff][j]);  
+ 389   3          }
+ 390   2        }
+ 391   1        Write_Data(0x00);
+ 392   1        f1=f1-ff*100;
+ 393   1        ff=f1/10;//printf("buff=%d\n",ff);
+ 394   1        for(j=0;j<5;j++)
+ 395   1        {
+ 396   2          Write_Data(number[ff][j]);  
+ 397   2        }
+ 398   1        Write_Data(0x00);
+ 399   1        f1=f1-ff*10;
+ 400   1        ff=f1/1;//printf("buff=%d\n",ff);
+ 401   1        for(j=0;j<5;j++)
+ 402   1        {
+ 403   2          Write_Data(number[ff][j]);  
+ 404   2        }
+ 405   1        Write_Data(0x00);
+ 406   1        Write_Data(0x60);//dot
+ 407   1        Write_Data(0x60);//dot
+ 408   1        Write_Data(0x00);
+ 409   1        f1=f1-ff;
+ 410   1        ff=f1/0.1;//printf("buff=%d\n",buff);
+ 411   1        for(j=0;j<5;j++)
+ 412   1        {
+ 413   2          Write_Data(number[ff][j]);  
+ 414   2        }
+ 415   1      }
+ 416          //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ 417          //  Fade In (Full Screen)
+ 418          //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ 419          void Fade_In()
+ 420          {
+ 421   1      unsigned int i; 
+ 422   1      
+ 423   1        Write_Command(0xAF);//Set_Display_On
+ 424   1        for(i=0;i<(Brightness+1);i++)
+ 425   1        {
+C51 COMPILER V9.60.0.0   COMBINE                                                           09/15/2021 22:09:36 PAGE 8   
+
+ 426   2          //Instruction_Setting('D',i,0x00);//Set_Contrast_Control(i);
+ 427   2          Write_Command(0x81);        // Set Contrast Control for Bank 0
+ 428   2          Write_Command(i);
+ 429   2          uDelay(200);
+ 430   2          uDelay(200);
+ 431   2          uDelay(200);
+ 432   2        }
+ 433   1      }
+ 434          
+ 435          
+ 436          //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ 437          //  Fade Out (Full Screen)
+ 438          //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ 439          void Fade_Out()
+ 440          {
+ 441   1      unsigned int i; 
+ 442   1      
+ 443   1        for(i=(Brightness+1);i>0;i--)
+ 444   1        {
+ 445   2          //Instruction_Setting('D',i-1,0x00);//Set_Contrast_Control(i-1);
+ 446   2          Write_Command(0x81);        // Set Contrast Control for Bank 0
+ 447   2          Write_Command(i-1);
+ 448   2          uDelay(200);
+ 449   2          uDelay(200);
+ 450   2          uDelay(200);
+ 451   2        }
+ 452   1        Write_Command(0xAE);//Set_Display_Off
+ 453   1      }
+ 454          
+ 455          
+ 456          //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ 457          //  Sleep Mode
+ 458          //
+ 459          //    "0x00" Enter Sleep Mode
+ 460          //    "0x01" Exit Sleep Mode
+ 461          //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ 462          void Sleep(unsigned char a)
+ 463          {
+ 464   1        switch(a)
+ 465   1        {
+ 466   2          case 0://sleep
+ 467   2            Write_Command(0xAE);//Set_Display_On_Off(0xAE);
+ 468   2            Write_Command(0xA5);//Set_Entire_Display(0xA5);
+ 469   2            break;
+ 470   2          case 1://wake
+ 471   2            Write_Command(0xA4);//Set_Entire_Display(0xA4);
+ 472   2            Write_Command(0xAF);//Set_Display_On_Off(0xAF);
+ 473   2            break;
+ 474   2        }
+ 475   1      }
+ 476          
+ 477          //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ 478          //  Initialization
+ 479          //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ 480          //  set display    Default => 0xAE ,  0xAE => Display Off  ,  0xAF => Display On
+ 481          void OLED_Init()
+ 482          {
+ 483   1      unsigned char i;
+ 484   1      
+ 485   1        RES=0;
+ 486   1        for(i=0;i<200;i++)
+ 487   1        {
+C51 COMPILER V9.60.0.0   COMBINE                                                           09/15/2021 22:09:36 PAGE 9   
+
+ 488   2          uDelay(200);
+ 489   2        }
+ 490   1        RES=1;
+ 491   1      
+ 492   1         Write_Command(0xae); /* set  display off */   
+ 493   1         Write_Command(0x00);    
+ 494   1         Write_Command(0x10);
+ 495   1         Write_Command(0xD5); /* set  lower column start address */
+ 496   1         Write_Command(0xA0); /* set  higher column start address */  
+ 497   1         Write_Command(0xA8); /* set  display start line */   
+ 498   1         Write_Command(0x3F);   
+ 499   1         Write_Command(0xD3); /* set  contrast control */
+ 500   1         Write_Command(0x00);    
+ 501   1         Write_Command(0x40);    
+ 502   1         Write_Command(0x00);   
+ 503   1         Write_Command(0x20); /* set  segment remap  */  
+ 504   1         Write_Command(0x02); /* set  normal display */   
+ 505   1         Write_Command(0xa1); /* set  multiplex ratio */
+ 506   1         Write_Command(0xC8); /* 1/64 */   
+ 507   1         Write_Command(0xDA); /* master configuration */
+ 508   1         Write_Command(0x12); /* external vcc supply */  
+ 509   1         Write_Command(0xc8); /* set  com scan direction */  
+ 510   1         Write_Command(0xd3); /* set  display offset  */
+ 511   1         Write_Command(0x40);   
+ 512   1         Write_Command(0x81); /* set  display clock divide/oscillator frequency */
+ 513   1         Write_Command(0xBF);    
+ 514   1         Write_Command(0xD9);    /*set area color mode off */
+ 515   1         Write_Command(0x25);       
+ 516   1         Write_Command(0xA4);
+ 517   1         Write_Command(0xA6);    
+ 518   1         Write_Command(0xaf); /* set  display on */
+ 519   1      }
+ 520          
+ 521          
+ 522          void set_LCD_display(void){
+ 523   1        unsigned char i;
+ 524   1        //FADE_IN
+ 525   1        Write_Command(0xAF);//Set_Display_On
+ 526   1        for(i=0;i<(0xBF+1);i++)
+ 527   1        {
+ 528   2          Write_Command(0x81);        
+ 529   2          Write_Command(i);
+ 530   2          uDelay(200);
+ 531   2          uDelay(200);
+ 532   2          uDelay(200);
+ 533   2        }
+ 534   1        //fill_ram
+ 535   1        for(i=0;i<8;i++)
+ 536   1        {
+ 537   2          //Instruction_Setting('I',i,0x00);//Set_Start_Page(i);
+ 538   2          Write_Command(0xB0|i);
+ 539   2          //Instruction_Setting('A',0x00,0x00);//Set_Start_Column(0x00);
+ 540   2          Write_Command(0x00);
+ 541   2          Write_Command(0x10);
+ 542   2          
+ 543   2          for(j=0;j<128;j++)
+ 544   2          {
+ 545   3            Write_Data(0xFF);
+ 546   3          }
+ 547   2        }
+ 548   1        Delay(5);
+ 549   1        //clear screen
+C51 COMPILER V9.60.0.0   COMBINE                                                           09/15/2021 22:09:36 PAGE 10  
+
+ 550   1        for(i=0;i<8;i++)
+ 551   1        {
+ 552   2          //Instruction_Setting('I',i,0x00);//Set_Start_Page(i);
+ 553   2          Write_Command(0xB0|i);
+ 554   2          //Instruction_Setting('A',0x00,0x00);//Set_Start_Column(0x00);
+ 555   2          Write_Command(0x00);
+ 556   2          Write_Command(0x10);
+ 557   2          
+ 558   2          for(j=0;j<128;j++)
+ 559   2          {
+ 560   3            Write_Data(0x00);
+ 561   3          }
+ 562   2        }
+ 563   1        Delay(5);
+ 564   1        //Frame
+ 565   1        Write_Command(0xB0|0x00); 
+ 566   1        Write_Command(0x00);
+ 567   1        Write_Command(0x10);
+ 568   1        for(i=0;i<Max_Column;i++)
+ 569   1        {
+ 570   2          Write_Data(0x01);
+ 571   2        }
+ 572   1        Write_Command(0xB0|0x07); 
+ 573   1        Write_Command(0x00);
+ 574   1        Write_Command(0x10);
+ 575   1        for(i=0;i<Max_Column;i++)
+ 576   1        {
+ 577   2          Write_Data(0x80);
+ 578   2        }
+ 579   1        for(i=0;i<8;i++)
+ 580   1        {
+ 581   2          //Instruction_Setting('I',i,0x00);//Set_Start_Page(i);
+ 582   2          Write_Command(0xB0|i);    
+ 583   2          for(j=0;j<Max_Column;j+=(Max_Column-1))
+ 584   2          {
+ 585   3            //Instruction_Setting('A',XLevel+j,0x00);//Set_Start_Column(XLevel+j);
+ 586   3            Write_Command(0x00+(XLevel+j)%16);
+ 587   3            Write_Command(0x10+(XLevel+j)/16);
+ 588   3            Write_Data(0xFF);
+ 589   3          }
+ 590   2        }
+ 591   1      }
+ 592          
+ 593          
+ 594          
+ 595          void ByteWrite(Uint8 src){
+ 596   1        //Uint8 reg;
+ 597   1          SCK=0;
+ 598   1          //reg=0x00;
+ 599   1          for (i = 0; i < 8; i++)
+ 600   1          {
+ 601   2              //reg =(src & 0x80)>>7;
+ 602   2              if(((src & 0x80)>>7)==0x01){
+ 603   3                P2|=0x20;//SDI P25
+ 604   3              }
+ 605   2              else{
+ 606   3                P2&=0xDF;//
+ 607   3              }
+ 608   2              _nop_();
+ 609   2              SCK = 1;
+ 610   2              _nop_();
+ 611   2              SCK = 0;
+C51 COMPILER V9.60.0.0   COMBINE                                                           09/15/2021 22:09:36 PAGE 11  
+
+ 612   2              src = src << 1;
+ 613   2          }
+ 614   1      }
+ 615          Uint8 ByteRead(void)
+ 616          {
+ 617   1          //Uint8 i;
+ 618   1          Uint8 tmp;
+ 619   1      
+ 620   1          SDIO = 1; //sdio pull high
+ 621   1      
+ 622   1          for (i = 0; i < 8; i++)
+ 623   1          {
+ 624   2              SCK = 1;
+ 625   2              if (SDIO)
+ 626   2                  tmp = (tmp << 1) | 0x01;
+ 627   2              else
+ 628   2                  tmp = tmp << 1;
+ 629   2              _nop_();
+ 630   2              SCK = 0;
+ 631   2              _nop_();
+ 632   2          }
+ 633   1      
+ 634   1          return tmp;
+ 635   1      }
+ 636          
+ 637          
+ 638          
+ 639          
+ 640          
+ 641          
+ 642          void    InitThermal(void);
+ 643          void    InitLCD(void);
+ 644          void    InitPin(void);
+ 645          float   I_detecting(void);
+ 646          //void    ByteWrite(Uint8 src);
+ 647          //Uint8   ByteRead(void);
+ 648          Uint16  Thermal_detecting(void);
+ 649          Uint16  MaxRead(unsigned char select);
+ 650          void    pwm_open(unsigned long u32SYSCLK, unsigned int u16CNT, unsigned int u16DLYUnit);
+ 651          void    OLED_Init(void);
+ 652          //void    set_LCD_display(void);
+ 653          
+ 654          
+ 655          //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ 656          //  Main Program
+ 657          //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ 658          Uint16 qq;
+ 659          void main()
+ 660          {
+ 661   1      //unsigned char i;
+ 662   1        Uint8 r=0;
+ 663   1        Uint16 T1,T2,T3;
+ 664   1        float Ampere;
+ 665   1        
+ 666   1        //TURN,EN
+ 667   1        InitPin();
+ 668   1        
+ 669   1        MFP_P16_UART0_TXD;
+ 670   1        P16_QUASI_MODE;
+ 671   1        UART_Open(24000000,UART0_Timer3,115200);
+ 672   1        ENABLE_UART0_PRINTF;
+ 673   1        
+C51 COMPILER V9.60.0.0   COMBINE                                                           09/15/2021 22:09:36 PAGE 12  
+
+ 674   1        
+ 675   1        //SFRS=0;
+ 676   1        //P2|=0xFF;
+ 677   1        P2&=0xF7;//SCS3=0,P23
+ 678   1        P2|=0x11;//SCS1=1,SCS2=1;P24,P20
+ 679   1        
+ 680   1        T1=128;
+ 681   1        T2=60;
+ 682   1        T3=25;
+ 683   1        Ampere=100.2;
+ 684   1        
+ 685   1        TURN=1;
+ 686   1        OLED_Init();
+ 687   1        Delay(1);
+ 688   1        EN=1;
+ 689   1        qq=0x00;
+ 690   1        qq=0x11;
+ 691   1        
+ 692   1        //T1 = MaxRead('1');
+ 693   1        
+ 694   1        while(1)
+ 695   1        {
+ 696   2          // All Pixels On (Test Pattern)
+ 697   2          /*
+ 698   2          Fade_In();
+ 699   2          Fill_RAM(0xFF);   
+ 700   2          Delay(5);
+ 701   2          Fill_RAM(0x00);     // Clear Screen
+ 702   2          Delay(5);
+ 703   2          Frame();
+ 704   2          
+ 705   2          */
+ 706   2          set_LCD_display();
+ 707   2          
+ 708   2          Show_Pattern(&LCD_basic[0][0],0x02,0x05,XLevelL+0x03,0x13);
+ 709   2          Show_Pattern(&Watt_basic[0][0],0x02,0x02,XLevelL+0x3D,0x18);
+ 710   2          Show_Pattern(&Watt_basic[4][0],0x03,0x03,XLevelL+0x3D,0x30);
+ 711   2          Show_Pattern(&Watt_basic[12][0],0x05,0x05,XLevelL+0x3D,0x30);
+ 712   2          Show_Pattern(&Watt_basic[20][0],0x06,0x06,XLevelL+0x5B,0x06);
+ 713   2          Show_Pattern(&Watt_unit[0][0],0x02,0x02,XLevelL+0x6F,0x0C);
+ 714   2          Show_Pattern(&Watt_unit[2][0],0x06,0x06,XLevelL+0x58,0x12);
+ 715   2          Show_Pattern(&Watt_unit[5][0],0x04,0x04,XLevelL+0x58,0x0C);
+ 716   2          Show_Pattern(&Watt_unit[7][0],0x06,0x06,XLevelL+0x55,0x03);
+ 717   2          for(r=2;r<6;r++){
+ 718   3            Show_Pattern(&Watt_unit[8][0],r,r,XLevelL+0x27,0x09);
+ 719   3          }
+ 720   2          
+ 721   2          //Delay(10);
+ 722   2          
+ 723   2          for(r=0;r<10;r++){
+ 724   3            T1 = MaxRead('1');
+ 725   3            printf("T1:%d\n",T1);
+ 726   3            //T2 = MaxRead('2');
+ 727   3            //printf("T2:%d\n",T2);
+ 728   3            //T3 = Thermal_detecting();
+ 729   3            //printf("T3:%d\n",T3);
+ 730   3            //printf("T1:%d,T2:%d,T3:%d\n",T1,T2,T3);
+ 731   3            //printf("T1:0x%x,T2:0x%x,T3:0x%x\n",T1,T2,T3);
+ 732   3      
+ 733   3            show_data(T1,0x03);
+ 734   3            show_data(T2,0x04);
+ 735   3            show_data(T3,0x02);
+C51 COMPILER V9.60.0.0   COMBINE                                                           09/15/2021 22:09:36 PAGE 13  
+
+ 736   3            show_data(T1-T2,0x05);
+ 737   3            show_mA(Ampere);
+ 738   3            show_mW(Ampere*5.1,0x04);
+ 739   3            show_mW(Ampere/5.1,0x06);
+ 740   3            Delay(10);
+ 741   3            
+ 742   3          }
+ 743   2          Fill_RAM(0x00);     // Clear Screen
+ 744   2          Fade_Out();
+ 745   2          
+ 746   2        }
+ 747   1        
+ 748   1      }
+ 749          
+ 750          void InitThermal(){
+ 751   1          //PWM,SCK,SCS1,SDIO,
+ 752   1          //SCS2,SCS3,SDI 
+ 753   1          MFP_P15_GPIO,MFP_P31_GPIO,MFP_P30_GPIO,MFP_P25_GPIO;
+ 754   1          //QUASI_MODE
+ 755   1          P15_QUASI_MODE,P31_PUSHPULL_MODE,P30_INPUT_MODE,P25_PUSHPULL_MODE;
+ 756   1          //P24
+ 757   1          SFRS = 1;
+ 758   1          P2M1 &= ~BIT4;
+ 759   1          P2M2 |=  BIT4;
+ 760   1        
+ 761   1          //P23
+ 762   1          SFRS = 1;
+ 763   1          P2M1 &= ~BIT3;
+ 764   1          P2M2 |=  BIT3;
+ 765   1        
+ 766   1          //P20
+ 767   1          SFRS = 1;
+ 768   1          P2M1 &= ~BIT0;
+ 769   1          P2M2 |=  BIT0;
+ 770   1          //,MFP_P20_GPIO,P20_PUSHPULL_MODE
+ 771   1          //SFRS = 1;
+ 772   1          //P2M1 &= ~BIT0;
+ 773   1          //P2M2 &= ~BIT0;
+ 774   1      }
+ 775          void InitLCD(){
+ 776   1          //SDIN,SCLK,DC,RES,CS QUASI mode
+ 777   1          MFP_P00_GPIO,MFP_P01_GPIO,MFP_P03_GPIO,MFP_P52_GPIO;
+ 778   1          P00_QUASI_MODE,P01_QUASI_MODE,P03_QUASI_MODE,P52_QUASI_MODE;
+ 779   1          //P02(DC) QUASI mode
+ 780   1          SFRS = 1;
+ 781   1          P0M1 &= ~BIT2;
+ 782   1          P0M2 &= ~BIT2;
+ 783   1      }
+ 784          void InitPin(){
+ 785   1          //ADC
+ 786   1          ENABLE_ADC_CH4;
+ 787   1          //single
+ 788   1          SFRS=0;
+ 789   1          ADCCON1&=0xEF; 
+ 790   1          //sampling time
+ 791   1          SFRS=0;
+ 792   1          ADCSR &= 0x8F;
+ 793   1          ADCSR |= 0x30;//ADCDIV=Fsys/8
+ 794   1          ADCCON2&=0xF1;
+ 795   1          ADCCON2|=(0x07)<<1;
+ 796   1          
+ 797   1          //TURN,EN
+C51 COMPILER V9.60.0.0   COMBINE                                                           09/15/2021 22:09:36 PAGE 14  
+
+ 798   1          MFP_P14_GPIO,MFP_P22_GPIO;
+ 799   1          P14_QUASI_MODE,P22_QUASI_MODE;
+ 800   1          //Thermal,LCD
+ 801   1          InitThermal();
+ 802   1          InitLCD();
+ 803   1      }
+ 804          Uint16 Thermal_detecting(void){
+ 805   1          //select CS turn on
+ 806   1          Uint16 temp=0x00;
+ 807   1          float test=0x0000;
+ 808   1        
+ 809   1          qq=qq&0xE6;//P24=1,P23=1,P20=1
+ 810   1          qq=qq+0x19;
+ 811   1          P2=qq;//P24=0,P23=0,P20=1
+ 812   1          _nop_();
+ 813   1        
+ 814   1          //write mode//
+ 815   1          ByteWrite(Adr_W);
+ 816   1          ByteWrite(OneShot);
+ 817   1          //read temp//
+ 818   1          _nop_();
+ 819   1          ByteWrite(Adr_TMSB);
+ 820   1          temp=ByteRead();
+ 821   1          temp=temp<<8;
+ 822   1          //printf("Room data:%x\n",temp);
+ 823   1          ByteWrite(Adr_TLSB);
+ 824   1          temp=temp+ByteRead();
+ 825   1          //printf("Room data:%x\n",temp);
+ 826   1        
+ 827   1          //all turn off  
+ 828   1          qq=qq&0xE6;//P24=1,P23=0,P20=1
+ 829   1          qq=qq+0x11;
+ 830   1          P2=qq;
+ 831   1          return temp;
+ 832   1      }
+ 833          
+ 834          /*
+ 835          Uint8 ByteRead(void)
+ 836          {
+ 837              Uint8 i;
+ 838              Uint8 tmp;
+ 839          
+ 840              SDIO = 1; //sdio pull high
+ 841          
+ 842              for (i = 0; i < 8; i++)
+ 843              {
+ 844                  SCK = 1;
+ 845                  //Delay(10);
+ 846                  if (SDIO)
+ 847                      tmp = (tmp << 1) | 0x01;
+ 848                  else
+ 849                      tmp = tmp << 1;
+ 850                  _nop_();
+ 851                  SCK = 0;
+ 852                  //Delay(10);
+ 853                  _nop_();
+ 854              }
+ 855          
+ 856              return tmp;
+ 857          }
+ 858          */
+ 859          Uint16 MaxRead(unsigned char select){
+C51 COMPILER V9.60.0.0   COMBINE                                                           09/15/2021 22:09:36 PAGE 15  
+
+ 860   1          Uint16 i;
+ 861   1          Uint16 b;
+ 862   1          Uint16 tmp;
+ 863   1        
+ 864   1          if(select=='1'){
+ 865   2            qq=qq&0xE6;
+ 866   2            qq=qq+0x01;
+ 867   2          }
+ 868   1          else if(select=='2'){
+ 869   2            qq=qq&0xE6;//P24=1,P23=0,P20=0
+ 870   2            qq=qq+0x10;     
+ 871   2          }
+ 872   1          else{
+ 873   2          }
+ 874   1          
+ 875   1          P2=qq;//P24=0,P23=0,P20=1
+ 876   1          /*
+ 877   1          _nop_();
+ 878   1          
+ 879   1          for (i = 0; i < 16; i++)
+ 880   1          {
+ 881   1              SCK = 1;//P3&=0xFB;
+ 882   1              if((SDIO&1)==1){
+ 883   1                b=0x0001;
+ 884   1              }
+ 885   1              else{
+ 886   1                b=0x0000;
+ 887   1              }
+ 888   1              tmp=(tmp << 1)+b;
+ 889   1              SCK = 0;//P3|=0x02;
+ 890   1              //printf("tmp:0x%x",tmp);
+ 891   1          }
+ 892   1        
+ 893   1          qq=qq&0xE6;//P24=1,P23=0,P20=1
+ 894   1          qq=qq+0x11;
+ 895   1          P2=qq;
+ 896   1          tmp=tmp>>3;
+ 897   1          tmp=tmp/4;
+ 898   1        */
+ 899   1          return tmp;
+ 900   1      }
+*** WARNING C280 IN LINE 860 OF ..\combine.c: 'i': unreferenced local variable
+*** WARNING C280 IN LINE 861 OF ..\combine.c: 'b': unreferenced local variable
+ 901          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   3285    ----
+   CONSTANT SIZE    =    329    ----
+   XDATA SIZE       =      2    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      9      48
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  2 WARNING(S),  0 ERROR(S)

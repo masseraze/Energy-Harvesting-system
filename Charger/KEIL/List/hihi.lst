@@ -1,0 +1,875 @@
+C51 COMPILER V9.60.0.0   HIHI                                                              01/29/2021 17:32:43 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE HIHI
+OBJECT MODULE PLACED IN .\Output\hihi.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE hihi.c OPTIMIZE(7,SPEED) BROWSE INCDIR(..\Library\Device\Include;..\Libr
+                    -ary\StdDriver\inc) DEBUG OBJECTEXTEND PRINT(.\List\hihi.lst) TABS(2) OBJECT(.\Output\hihi.obj)
+
+line level    source
+
+   1          #include "ML51.H"
+   2          #include "A7137reg.h"
+   3          #define Sint8  signed   char
+   4          #define Uint8  unsigned char
+   5          #define Uint16 unsigned int
+   6          #define Uint32 unsigned long
+   7          
+   8          #define NO                  0
+   9          #define YES                 1
+  10          
+  11          #define LOW                 0
+  12          #define HIGH                1
+  13          
+  14          #define ON                  1
+  15          #define OFF                 0
+  16          
+  17          #define ENABLE              1
+  18          #define DISABLE             0
+  19          
+  20          #define MASTER              1
+  21          #define SLAVE               0
+  22          
+  23          #define ONEWAY              0
+  24          #define TWOWAY              1
+  25          
+  26          /*********************************************************************
+  27          **  I/O Declaration
+  28          *********************************************************************/
+  29          #define SCS         P00     //spi SCS
+  30          #define SCK         P01     //spi SCK
+  31          #define SDIO        P02     //spi SDIO
+  32          #define CKO         P03     //CKO
+  33          //#define GIO1        P04     //GPIO1(P52)
+  34          //#define GIO2        P05     //GPIO2(P53)
+  35          #define Button      P17     //select mode
+  36          
+  37          /*********************************************************************
+  38          **  Constant Declaration
+  39          *********************************************************************/
+  40          #define TIMEOUT         200
+  41          #define t0hrel          500
+  42          
+  43          /*********************************************************************
+  44          **  Global Variable Declaration
+  45          *********************************************************************/
+  46          Uint8       data    delayCnt;
+  47          Uint8       data    timer;
+  48          Uint8       data    TimeoutFlag;
+  49          Uint16      idata   RxCnt;
+  50          Uint32      idata   Err_ByteCnt;
+  51          Uint32      idata   Err_BitCnt;
+  52          Uint16      idata   TimerCnt0;
+  53          Uint8       data    *Uartptr;
+  54          Uint8       data    UartSendCnt;
+C51 COMPILER V9.60.0.0   HIHI                                                              01/29/2021 17:32:43 PAGE 2   
+
+  55          Uint8       data    CmdBuf[12];
+  56          Uint8       xdata   tmpbuf[128];
+  57          Uint8       idata   Err_Frame;
+  58          Uint8       data    SubRxCnt;
+  59          
+  60          unsigned int xdata ADCdataAIN;
+  61          float VREF=3.03;
+  62          
+  63          const Uint8 code BitCount_Tab[16] = {0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4};
+  64          const Uint8 code ID_Tab[8] = {0x34, 0x75, 0xC5, 0x2A, 0xC7, 0x33, 0x45, 0xEA}; //ID code
+  65          const Uint8 code PageTab[8] = {0x00, 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70}; //page select
+  66          const Uint8 code PN9_Tab[] =
+  67          {
+  68          /*
+  69              0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 
+  70              0x39, 0x30, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 
+  71              0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41,
+  72              0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41,
+  73              0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41,
+  74              0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 
+  75              0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 
+  76              0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41
+  77          */
+  78              0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48,
+  79              0x49, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56,
+  80              0x57, 0x58, 0x59, 0x60, 0x61, 0x62, 0x63, 0x64,
+  81              0x65, 0x66, 0x67, 0x68, 0x69, 0x70, 0x71, 0x72,
+  82              0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A,
+  83              0x7B, 0x7C, 0x7D, 0x7E, 0x7F, 0x6A, 0x6B, 0x6C,
+  84              0x6D, 0x6E, 0x6F, 0x5A, 0x5B, 0x5C, 0x5D, 0x5F,
+  85              0x4A, 0x4B, 0x4C, 0x4E, 0x4F, 0x5E, 0x41, 0x41
+  86          
+  87          };  // This table are 64bytes PN9 pseudo random code.
+  88          
+  89          const Uint8 code A7137Config[] =
+  90          {
+  91              0x00, //RESET register,         only reset, not use on config
+  92              0x62, //MODE register,
+  93              0x00, //CALIBRATION register,
+  94              0x7F, //FIFO1 register,
+  95              0xC0, //FIFO2 register,
+  96              0x00, //FIFO register,          for fifo read/write
+  97              0x00, //IDDATA register,        for idcode
+  98              0x00, //RCOSC1 register,
+  99              0x00, //RCOSC2 register,
+ 100              0x00, //RCOSC3 register,
+ 101              0x12, //CKO register,
+ 102              0x01, //GPIO1 register
+ 103              0x1D, //GPIO2 register,
+ 104              0x5F, //DATARATECLOCK register,
+ 105              0x00, //PLL1 register,
+ 106              0x0E, //PLL2 register,          RFbase 2400.001MHz
+ 107              0x96, //PLL3 register,
+ 108              0x00, //PLL4 register,
+ 109              0x04, //PLL5 register,
+ 110              0x3C, //ChannelGroup1 register,
+ 111              0x78, //ChannelGroup1 register,
+ 112              0xAE, //TX1 register,
+ 113              0x40, //TX2 register,
+ 114              0x12, //DELAY1 register,
+ 115              0x40, //DELAY2 register,
+ 116              0x70, //RX register,
+C51 COMPILER V9.60.0.0   HIHI                                                              01/29/2021 17:32:43 PAGE 3   
+
+ 117              0x6F, //RXGAIN1 register,
+ 118              0xC2, //RXGAIN2 register,
+ 119              0x1D, //RXGAIN3 register,
+ 120              0xC7, //RXGAIN4 register,
+ 121              0x00, //RSSI register,
+ 122              0xF1, //ADC register,
+ 123              0x07, //CODE1 register,
+ 124              0x05, //CODE2 register,
+ 125              0x2A, //CODE3 register,
+ 126              0x20, //IFCAL1 register,
+ 127              0xFF, //IFCAL2 register,
+ 128              0x80, //VCOCCAL register,
+ 129              0xD0, //VCOCAL1 register,
+ 130              0x00, //VCOCAL2 register,
+ 131              0x70, //VCO deviation 1 register,
+ 132              0x00, //VCO deviation 2 register,
+ 133              0x00, //DSA register,
+ 134              0x9C, //VCO Modulation delay register,
+ 135              0xF0, //BATTERY register,
+ 136              0x3F, //TXTEST register,
+ 137              0x47, //RXDEM1 register,
+ 138              0xF7, //RXDEM2 register,
+ 139              0xF0, //CPC1 register,
+ 140              0x37, //CPC2 register,
+ 141              0x55, //CRYSTAL register,
+ 142              0x15, //PLLTEST register,
+ 143              0x15, //VCOTEST register,
+ 144              0x00, //RF Analog register,
+ 145              0x00, //Key data register,
+ 146              0x37, //Channel select register,
+ 147              0x00, //ROM register,
+ 148              0x00, //DataRate register,
+ 149              0x00, //FCR register,
+ 150              0x00, //ARD register,
+ 151              0x00, //AFEP register,
+ 152              0x00, //FCB register,
+ 153              0x00, //KEYC register,
+ 154              0x00  //USID register,
+ 155          };
+ 156          
+ 157          const Uint8 code A7137_Addr2A_Config[] =
+ 158          {
+ 159              0x34, //page0,
+ 160              0x49, //page1,
+ 161              0x00, //Page2,
+ 162              0x80, //page3,
+ 163              0x80, //page4,
+ 164              0x00, //page5,
+ 165              0x5A, //page6,
+ 166              0x40, //page7,
+ 167          };
+ 168          
+ 169          const Uint8 code A7137_Addr38_Config[] =
+ 170          {
+ 171              0x00, //page0,
+ 172              0x10, //page1,
+ 173              0x20, //page2,
+ 174              0x24, //page3,
+ 175              0x20, //page4,
+ 176          };
+ 177          
+ 178          /*********************************************************************
+C51 COMPILER V9.60.0.0   HIHI                                                              01/29/2021 17:32:43 PAGE 4   
+
+ 179          **  function Declaration
+ 180          *********************************************************************/
+ 181          void InitPIN(void);
+ 182          void InitTimer0(void);
+ 183          float  I_detecting(void);
+ 184          void Timer0_ISR(void);
+ 185          void A7137_Reset(void);
+ 186          void A7137_WriteReg_Page(Uint8 addr, Uint8 wbyte, Uint8 page);
+ 187          Uint8 A7137_ReadReg_Page(Uint8 addr, Uint8 page);
+ 188          void A7137_WriteReg(Uint8, Uint8);
+ 189          Uint8 A7137_ReadReg(Uint8);
+ 190          void ByteSend(Uint8 src);
+ 191          Uint8 ByteRead(void);
+ 192          void A7137_WriteID(void);
+ 193          void A7137_WriteFIFO(void);
+ 194          void A7137_WriteFIFO_1(void);
+ 195          void initRF(void);
+ 196          void A7137_Config(void);
+ 197          void A7137_Cal(void);
+ 198          void RxPacket(void);
+ 199          void StrobeCmd(Uint8);
+ 200          void SetCH(Uint8);
+ 201          void Send4Bit(Uint8 src);
+ 202          void ReadDataToBuf(Uint8 *dest);
+ 203          
+ 204          unsigned char uart_receive_data;
+ 205          bit receiveFlag, bufOverFlag;
+ 206          /*********************************************************************************************************
+             -***
+ 207          *    TIMER 0 interrupt subroutine
+ 208          **********************************************************************************************************
+             -**/
+ 209          void Timer0_ISR(void) interrupt 1   //interrupt address is 0x000B
+ 210          {
+ 211   1          _push_(SFRS);
+ 212   1      
+ 213   1          TF0 = 0; // Clear Timer0 interrupt
+ 214   1          TH0 = (65536 - t0hrel) >> 8; // Reload Timer0 high byte,low byte
+ 215   1          TL0 = 65536 - t0hrel;
+ 216   1          timer++;
+ 217   1      
+ 218   1          if (timer == TIMEOUT)
+ 219   1          {
+ 220   2              TimeoutFlag = 1;
+ 221   2          }
+ 222   1      
+ 223   1          TimerCnt0++;
+ 224   1      
+ 225   1          if (TimerCnt0 == 500)
+ 226   1          {
+ 227   2              TimerCnt0 = 0;
+ 228   2              CmdBuf[0] = 0xF1;
+ 229   2      
+ 230   2              memcpy(&CmdBuf[1], &RxCnt, 2);
+ 231   2              memcpy(&CmdBuf[3], &SubRxCnt, 4);
+ 232   2              memcpy(&CmdBuf[7], &Err_BitCnt, 4);
+ 233   2              memcpy(&CmdBuf[11], &Err_Frame, 1);
+ 234   2      
+ 235   2              UartSendCnt = 12;
+ 236   2              Uartptr = &CmdBuf[0];
+ 237   2              SBUF = CmdBuf[0];
+ 238   2          }
+C51 COMPILER V9.60.0.0   HIHI                                                              01/29/2021 17:32:43 PAGE 5   
+
+ 239   1      
+ 240   1      
+ 241   1          _pop_(SFRS);
+ 242   1      }
+ 243          
+ 244          /************************************************************************
+ 245          **  init Timer0
+ 246          ************************************************************************/
+ 247          void InitTimer0(void)
+ 248          {
+ 249   1          ENABLE_TIMER0_MODE1;
+ 250   1          TIMER0_FSYS;
+ 251   1      
+ 252   1          TH0 = (65536 - t0hrel) >> 8; // Reload Timer0 high byte,low byte
+ 253   1          TL0 = 65536 - t0hrel;
+ 254   1      
+ 255   1          ENABLE_TIMER0_INTERRUPT;                       //enable Timer0 interrupt
+ 256   1      
+ 257   1          set_TCON_TR0;                                  //Timer0 run
+ 258   1      
+ 259   1      }
+ 260          
+ 261          /*************************************************************
+ 262          //  UART interrupt subroutine.
+ 263          /**************************************************************/
+ 264          void Serial_ISR(void) interrupt 4
+ 265          {
+ 266   1          _push_(SFRS);
+ 267   1      
+ 268   1          if (TI == 1)
+ 269   1          {
+ 270   2              TI = 0;
+ 271   2              UartSendCnt--;
+ 272   2      
+ 273   2              if (UartSendCnt != 0)
+ 274   2              {
+ 275   3                  Uartptr++;
+ 276   3                  SBUF = *Uartptr;
+ 277   3              }
+ 278   2          }
+ 279   1      
+ 280   1          _pop_(SFRS);
+ 281   1      }
+ 282          
+ 283          /*********************************************************************/
+ 284          void main(void)
+ 285          {
+ 286   1        InitPIN();
+ 287   1        InitTimer0();
+ 288   1        ENABLE_GLOBAL_INTERRUPT;
+ 289   1        TR0=1; //timer0 on
+ 290   1        EA=1; //enable interrupt
+ 291   1      
+ 292   1        if ((P4 & 0x04)==0x04) //if P4.2=1, master
+ 293   1        {
+ 294   2          initRF(); //init RF
+ 295   2          StrobeCmd(CMD_STBY);
+ 296   2      
+ 297   2          SetCH(100); //freq 2450.001MHz
+ 298   2                  /* 
+ 299   2                  How to set RF channel
+ 300   2                         RF base Freq : 2400.001MHz
+C51 COMPILER V9.60.0.0   HIHI                                                              01/29/2021 17:32:43 PAGE 6   
+
+ 301   2                         Channel step : 0.5MHz
+ 302   2                         SetCH        : 100
+ 303   2                         RF Frequency = RF base Freq + (Channel step * SetCH) = 2400.001MHz  + (   0.5MHz    *  
+             -100 ) = 2450.001MHz 
+ 304   2                  */
+ 305   2          SCS=0;
+ 306   2          ByteSend(FIFO1_REG);//fifo length upto 4K bytes
+ 307   2          ByteSend(0x3F); //low byte
+ 308   2          ByteSend(0x00); //high byte
+ 309   2          SCS=1;
+ 310   2      
+ 311   2          while(1)
+ 312   2          {
+ 313   3            A7137_WriteFIFO(); //write data to tx fifo
+ 314   3            StrobeCmd(CMD_TX); //entry tx & transmit
+ 315   3            while((P5&0x04)==0x04); //wait transmit completed GIO1
+ 316   3      
+ 317   3            StrobeCmd(CMD_RX); //entry rx
+ 318   3      
+ 319   3            timer=0;
+ 320   3            TimeoutFlag=0;
+ 321   3            while(((P5&0x04)==0x04)&& TimeoutFlag==0); //wait receive completed GIO1
+ 322   3            if (TimeoutFlag)
+ 323   3            {
+ 324   4              StrobeCmd(CMD_STBY); //exit rx mode
+ 325   4              continue;
+ 326   4            }
+ 327   3              RxPacket();
+ 328   3            }
+ 329   2        }
+ 330   1        else //if P4.2=0, slave
+ 331   1        {
+ 332   2          initRF(); //init RF
+ 333   2          StrobeCmd(CMD_STBY);
+ 334   2      
+ 335   2          RxCnt = 0;
+ 336   2          Err_ByteCnt = 0;
+ 337   2          Err_BitCnt = 0;
+ 338   2      
+ 339   2          SetCH(100);  //freq 2450.001MHz
+ 340   2          SCS=0;
+ 341   2          ByteSend(FIFO1_REG);//fifo length upto 4K bytes
+ 342   2          ByteSend(0x3F); //low byte
+ 343   2          ByteSend(0x00); //high byte
+ 344   2          SCS=1;
+ 345   2      
+ 346   2                  while(1)
+ 347   2                  {
+ 348   3                    StrobeCmd(CMD_RX);
+ 349   3                    while((P5&0x04)==0x04); //wait receive completed GIO1
+ 350   3                    RxPacket();
+ 351   3      
+ 352   3                    A7137_WriteFIFO(); //write data to tx fifo
+ 353   3                    StrobeCmd(CMD_TX); //entry tx
+ 354   3                    while((P5&0x04)==0x04); //wait transmit completed GIO1
+ 355   3                  }
+ 356   2        }
+ 357   1      }
+ 358          
+ 359          /************/
+ 360          
+ 361          void InitPIN(void)
+C51 COMPILER V9.60.0.0   HIHI                                                              01/29/2021 17:32:43 PAGE 7   
+
+ 362          {
+ 363   1          //P00~3 
+ 364   1          MFP_P00_GPIO,MFP_P01_GPIO,MFP_P02_GPIO,MFP_P03_GPIO;
+ 365   1          P00_QUASI_MODE,P01_QUASI_MODE,P02_QUASI_MODE,P03_QUASI_MODE;
+ 366   1          //P17 SELECT MODE
+ 367   1          MFP_P17_GPIO,P17_QUASI_MODE;
+ 368   1          //P52 GPIO1,P53 GPIO2
+ 369   1          MFP_P52_GPIO,MFP_P53_GPIO;
+ 370   1          P52_QUASI_MODE,P53_QUASI_MODE;
+ 371   1          //P32 ADC
+ 372   1          ENABLE_ADC_CH7;
+ 373   1          ADCCON1|=0x30;                     /* clock divider */
+ 374   1          ADCCON2|=0x0E;                     /* AQT time */
+ 375   1          //P30 P31 UART
+ 376   1          Enable_UART0_VCOM_printf();
+ 377   1      }
+ 378          
+ 379          /************************************************************************
+ 380          **  Reset_RF
+ 381          ************************************************************************/
+ 382          void A7137_Reset(void)
+ 383          {
+ 384   1        A7137_WriteReg(MODE_REG, 0x00); //reset RF chip
+ 385   1      }
+ 386          
+ 387          /************************************************************************
+ 388          **  WriteID
+ 389          ************************************************************************/
+ 390          void A7137_WriteID(void)
+ 391          {
+ 392   1        Uint8 i;
+ 393   1        Uint8 d1,d2,d3,d4,d5,d6,d7,d8;
+ 394   1        Uint8 addr;
+ 395   1      
+ 396   1        addr = IDCODE_REG; //send address 0x06, bit cmd=0, r/w=0
+ 397   1        SCS = 0;
+ 398   1        ByteSend(addr);
+ 399   1        for (i=0; i < 8; i++)
+ 400   1          ByteSend(ID_Tab[i]);
+ 401   1        SCS = 1;
+ 402   1      
+ 403   1        addr = IDCODE_REG | 0x40; //send address 0x06, bit cmd=0, r/w=1
+ 404   1        SCS=0;
+ 405   1        ByteSend(addr);
+ 406   1        d1=ByteRead();
+ 407   1        d2=ByteRead();
+ 408   1        d3=ByteRead();
+ 409   1        d4=ByteRead();
+ 410   1        d5=ByteRead();
+ 411   1        d6=ByteRead();
+ 412   1        d7=ByteRead();
+ 413   1        d8=ByteRead();
+ 414   1        SCS=1;
+ 415   1      }
+ 416          
+ 417          /*********************************************************************
+ 418          ** A7137_ReadReg_Page
+ 419          *********************************************************************/
+ 420          Uint8 A7137_ReadReg_Page(Uint8 addr, Uint8 page)
+ 421          {
+ 422   1        Uint8 tmp;
+ 423   1      
+C51 COMPILER V9.60.0.0   HIHI                                                              01/29/2021 17:32:43 PAGE 8   
+
+ 424   1        A7137_WriteReg(RFANALOG_REG, A7137Config[RFANALOG_REG] | PageTab[page]);//page select
+ 425   1        tmp = A7137_ReadReg(addr);
+ 426   1        return tmp;
+ 427   1      }
+ 428          
+ 429          /*********************************************************************
+ 430          ** A7137_WriteReg_Page
+ 431          *********************************************************************/
+ 432          void A7137_WriteReg_Page(Uint8 addr, Uint8 wbyte, Uint8 page)
+ 433          {
+ 434   1        A7137_WriteReg(RFANALOG_REG, A7137Config[RFANALOG_REG] | PageTab[page]);//page select
+ 435   1        A7137_WriteReg(addr, wbyte);
+ 436   1      }
+ 437          
+ 438          /************************************************************************
+ 439          **  A7137_WriteReg
+ 440          ************************************************************************/
+ 441          void A7137_WriteReg(Uint8 addr, Uint8 dataByte)
+ 442          {
+ 443   1          Uint8 i;
+ 444   1      
+ 445   1        SCS = 0;
+ 446   1      
+ 447   1          addr |= 0x00; //bit cmd=0,r/w=0
+ 448   1          for(i = 0; i < 8; i++)
+ 449   1          {
+ 450   2              if(addr & 0x80)
+ 451   2                  SDIO = 1;
+ 452   2              else
+ 453   2                  SDIO = 0;
+ 454   2      
+ 455   2              SCK = 1;
+ 456   2              _nop_();
+ 457   2              SCK = 0;
+ 458   2              addr = addr << 1;
+ 459   2          }
+ 460   1          _nop_();
+ 461   1      
+ 462   1          //send data byte
+ 463   1          for(i = 0; i < 8; i++)
+ 464   1          {
+ 465   2              if(dataByte & 0x80)
+ 466   2                  SDIO = 1;
+ 467   2              else
+ 468   2                  SDIO = 0;
+ 469   2      
+ 470   2              SCK = 1;
+ 471   2              _nop_();
+ 472   2              SCK = 0;
+ 473   2              dataByte = dataByte<< 1;
+ 474   2          }
+ 475   1      
+ 476   1          SCS = 1;
+ 477   1      }
+ 478          
+ 479          /************************************************************************
+ 480          **  A7137_ReadReg
+ 481          ************************************************************************/
+ 482          Uint8 A7137_ReadReg(Uint8 addr)
+ 483          {
+ 484   1          Uint8 i;
+ 485   1          Uint8 tmp;
+C51 COMPILER V9.60.0.0   HIHI                                                              01/29/2021 17:32:43 PAGE 9   
+
+ 486   1      
+ 487   1        SCS = 0;
+ 488   1          addr |= 0x40; //bit cmd=0,r/w=1
+ 489   1          for(i = 0; i < 8; i++)
+ 490   1          {
+ 491   2              if(addr & 0x80)
+ 492   2                  SDIO = 1;
+ 493   2              else
+ 494   2                  SDIO = 0;
+ 495   2      
+ 496   2          _nop_();
+ 497   2              SCK = 1;
+ 498   2              _nop_();
+ 499   2              SCK = 0;
+ 500   2      
+ 501   2              addr = addr << 1;
+ 502   2          }
+ 503   1      
+ 504   1          _nop_();
+ 505   1          SDIO = 1;
+ 506   1      
+ 507   1          //read data
+ 508   1          for(i = 0; i < 8; i++)
+ 509   1          {
+ 510   2              if(SDIO)
+ 511   2                  tmp = (tmp << 1) | 0x01;
+ 512   2              else
+ 513   2                  tmp = tmp << 1;
+ 514   2      
+ 515   2              SCK = 1;
+ 516   2              _nop_();
+ 517   2              SCK = 0;
+ 518   2          }
+ 519   1          SCS = 1;
+ 520   1          return tmp;
+ 521   1      }
+ 522          
+ 523          /************************************************************************
+ 524          **  ByteSend
+ 525          ************************************************************************/
+ 526          void ByteSend(Uint8 src)
+ 527          {
+ 528   1          Uint8 i;
+ 529   1      
+ 530   1          for(i = 0; i < 8; i++)
+ 531   1          {
+ 532   2              if(src & 0x80)
+ 533   2                  SDIO = 1;
+ 534   2              else
+ 535   2                  SDIO = 0;
+ 536   2      
+ 537   2          _nop_();
+ 538   2              SCK = 1;
+ 539   2              _nop_();
+ 540   2              SCK = 0;
+ 541   2              src = src << 1;
+ 542   2          }
+ 543   1      }
+ 544          
+ 545          /************************************************************************
+ 546          **  ByteRead
+ 547          ************************************************************************/
+C51 COMPILER V9.60.0.0   HIHI                                                              01/29/2021 17:32:43 PAGE 10  
+
+ 548          Uint8 ByteRead(void)
+ 549          {
+ 550   1        Uint8 i,tmp;
+ 551   1      
+ 552   1          SDIO = 1; //sdio pull high
+ 553   1          for(i = 0; i < 8; i++)
+ 554   1          {
+ 555   2              if(SDIO)
+ 556   2                  tmp = (tmp << 1) | 0x01;
+ 557   2              else
+ 558   2                  tmp = tmp << 1;
+ 559   2      
+ 560   2              SCK = 1;
+ 561   2              _nop_();
+ 562   2              SCK = 0;
+ 563   2          }
+ 564   1          return tmp;
+ 565   1      }
+ 566          
+ 567          /************************************************************************
+ 568          **  Send4Bit
+ 569          ************************************************************************/
+ 570          void Send4Bit(Uint8 src)
+ 571          {
+ 572   1          Uint8 i;
+ 573   1      
+ 574   1          for(i = 0; i < 4; i++)
+ 575   1          {
+ 576   2              if(src & 0x80)
+ 577   2                  SDIO = 1;
+ 578   2              else
+ 579   2                  SDIO = 0;
+ 580   2      
+ 581   2          _nop_();
+ 582   2              SCK = 1;
+ 583   2              _nop_();
+ 584   2              SCK = 0;
+ 585   2              src = src << 1;
+ 586   2          }
+ 587   1      }
+ 588          
+ 589          /*********************************************************************
+ 590          ** SetCH
+ 591          *********************************************************************/
+ 592          void SetCH(Uint8 ch)
+ 593          {
+ 594   1        A7137_WriteReg(PLL1_REG, ch); //RF freq = RFbase + (CH_Step * ch)
+ 595   1      }
+ 596          
+ 597          /*********************************************************************
+ 598          ** initRF
+ 599          *********************************************************************/
+ 600          void initRF(void)
+ 601          {
+ 602   1          //init io pin
+ 603   1          SCS = 1;
+ 604   1          SCK = 0;
+ 605   1          SDIO = 1;
+ 606   1          CKO = 1;
+ 607   1          set_P5_2;//GIO1 = 1;
+ 608   1          set_P5_3;//GIO2 = 1;
+ 609   1      
+C51 COMPILER V9.60.0.0   HIHI                                                              01/29/2021 17:32:43 PAGE 11  
+
+ 610   1        A7137_Reset(); //reset A7105 RF chip
+ 611   1        A7137_WriteID(); //write ID code
+ 612   1        A7137_Config(); //config A7105 chip
+ 613   1        A7137_Cal(); //calibration IF,VCO,VCOC
+ 614   1      }
+ 615          
+ 616          /*********************************************************************
+ 617          ** A7137_WriteFIFO
+ 618          *********************************************************************/
+ 619          void A7137_WriteFIFO(void)
+ 620          {
+ 621   1        Uint8 i;
+ 622   1        Uint8 cmd;
+ 623   1      
+ 624   1        cmd = FIFO_REG; //send address 0x05, bit cmd=0, r/w=0
+ 625   1          SCS=0;
+ 626   1        ByteSend(cmd);
+ 627   1        for(i=0; i <64; i++)
+ 628   1          ByteSend(PN9_Tab[i]);
+ 629   1        SCS=1;
+ 630   1      }
+ 631          
+ 632          /*********************************************************************
+ 633          ** Strobe Command
+ 634          *********************************************************************/
+ 635          void StrobeCmd(Uint8 cmd)
+ 636          {
+ 637   1        SCS = 0;
+ 638   1        Send4Bit(cmd);
+ 639   1        SCS = 1;
+ 640   1      }
+ 641          
+ 642          /*********************************************************************
+ 643          ** RxPacket
+ 644          *********************************************************************/
+ 645          void RxPacket(void)
+ 646          {
+ 647   1          Uint8 i;
+ 648   1          Uint8 recv;
+ 649   1          Uint8 tmp;
+ 650   1          Uint8 cmd;
+ 651   1      
+ 652   1        RxCnt++;
+ 653   1        cmd = FIFO_REG | 0x40; //address 0x05, bit cmd=0, r/w=1
+ 654   1      
+ 655   1          SCS=0;
+ 656   1        ByteSend(cmd);
+ 657   1        for(i=0; i <64; i++)
+ 658   1        {
+ 659   2          recv = ByteRead();
+ 660   2          printf("%c,",recv);
+ 661   2          tmpbuf[i]=recv;
+ 662   2          if((recv ^ PN9_Tab[i])!=0)
+ 663   2              {
+ 664   3                  tmp = recv ^ PN9_Tab[i];
+ 665   3                  Err_BitCnt += (BitCount_Tab[tmp>>4] + BitCount_Tab[tmp & 0x0F]);
+ 666   3              }
+ 667   2          }
+ 668   1        printf("\n");
+ 669   1        SCS=1;
+ 670   1      }
+ 671          
+C51 COMPILER V9.60.0.0   HIHI                                                              01/29/2021 17:32:43 PAGE 12  
+
+ 672          /*********************************************************************
+ 673          ** Err_State
+ 674          *********************************************************************/
+ 675          void Err_State(void)
+ 676          {
+ 677   1          //ERR display
+ 678   1          //Error Proc...
+ 679   1          //...
+ 680   1          while(1);
+ 681   1      }
+ 682          
+ 683          /*********************************************************************
+ 684          ** CHGroupCal
+ 685          *********************************************************************/
+ 686          void CHGroupCal(Uint8 ch)
+ 687          {
+ 688   1          Uint8 tmp;
+ 689   1          Uint8 vb,vbcf;
+ 690   1          Uint8 deva,adev;
+ 691   1      
+ 692   1        A7137_WriteReg(PLL1_REG, ch);
+ 693   1      
+ 694   1        A7137_WriteReg(CALIBRATION_REG, 0x0C);
+ 695   1        do
+ 696   1        {
+ 697   2          tmp = A7137_ReadReg(CALIBRATION_REG);
+ 698   2          tmp &= 0x0C;
+ 699   2        }
+ 700   1        while (tmp);
+ 701   1      
+ 702   1          //for check
+ 703   1          tmp = A7137_ReadReg(VCOCAL1_REG);
+ 704   1        vb = tmp & 0x07;
+ 705   1        vbcf = (tmp >>3) & 0x01;
+ 706   1      
+ 707   1        deva = A7137_ReadReg(VCODEVCAL1_REG);
+ 708   1        adev = A7137_ReadReg(VCODEVCAL2_REG);
+ 709   1        
+ 710   1        if(adev<41||adev>68)
+ 711   1            Err_State();
+ 712   1      
+ 713   1        if (vbcf)
+ 714   1           Err_State();//error
+ 715   1      }
+ 716          
+ 717          /*********************************************************************
+ 718          ** calibration
+ 719          *********************************************************************/
+ 720          void A7137_Cal(void)
+ 721          {
+ 722   1        Uint8 tmp, loopCnt;
+ 723   1        Uint8 fb, fbcf, fcd, vcb, vccf, rhc, rlc;
+ 724   1      
+ 725   1          StrobeCmd(CMD_PLL); //calibration @PLL state
+ 726   1      
+ 727   1        //calibration IF procedure
+ 728   1        loopCnt = 0;
+ 729   1      
+ 730   1        while(1)
+ 731   1        {
+ 732   2          A7137_WriteReg(CALIBRATION_REG, 0x02);
+ 733   2          do
+C51 COMPILER V9.60.0.0   HIHI                                                              01/29/2021 17:32:43 PAGE 13  
+
+ 734   2          {
+ 735   3            tmp = A7137_ReadReg(CALIBRATION_REG);
+ 736   3            tmp &= 0x02;
+ 737   3          }
+ 738   2          while(tmp);
+ 739   2      
+ 740   2          tmp = A7137_ReadReg(IFCAL1_REG);
+ 741   2          fb = tmp & 0x0F;
+ 742   2          if (fb>3 && fb<11)
+ 743   2            break;
+ 744   2      
+ 745   2          loopCnt++;
+ 746   2          if (loopCnt>=10)
+ 747   2            break;
+ 748   2        }
+ 749   1      
+ 750   1        if (loopCnt >=10)
+ 751   1          Err_State();
+ 752   1      
+ 753   1        //calibration RSSI, VCC procedure
+ 754   1        A7137_WriteReg(CALIBRATION_REG, 0x11);
+ 755   1        do
+ 756   1        {
+ 757   2          tmp = A7137_ReadReg(CALIBRATION_REG);
+ 758   2          tmp &= 0x11;
+ 759   2        }
+ 760   1        while(tmp);
+ 761   1        
+ 762   1        //calibration VBC,VDC procedure
+ 763   1        CHGroupCal(30); //calibrate channel group Bank I
+ 764   1        CHGroupCal(90); //calibrate channel group Bank II
+ 765   1        CHGroupCal(150); //calibrate channel group Bank III
+ 766   1        StrobeCmd(CMD_STBY); //return to STBY state
+ 767   1      
+ 768   1        //for check
+ 769   1        tmp = A7137_ReadReg(IFCAL1_REG);
+ 770   1        fb = tmp & 0x0F;
+ 771   1        fbcf = (tmp >>4) & 0x01;
+ 772   1      
+ 773   1        tmp = A7137_ReadReg(IFCAL2_REG);
+ 774   1        fcd = tmp & 0x1F;
+ 775   1      
+ 776   1        tmp = A7137_ReadReg(VCOCCAL_REG) & 0x1F;
+ 777   1        vcb = tmp & 0x0F;
+ 778   1        vccf = (tmp >>4) & 0x01;
+ 779   1      
+ 780   1        rhc = A7137_ReadReg(RXGAIN2_REG);
+ 781   1        rlc = A7137_ReadReg(RXGAIN3_REG);
+ 782   1      
+ 783   1        if (fbcf || vccf)
+ 784   1           Err_State();
+ 785   1      }
+ 786          
+ 787          /*********************************************************************
+ 788          ** A7137_Config
+ 789          *********************************************************************/
+ 790          void A7137_Config(void)
+ 791          {
+ 792   1        Uint8 i;
+ 793   1      
+ 794   1          //0x00 mode register, for reset
+ 795   1          //0x05 fifo data register
+C51 COMPILER V9.60.0.0   HIHI                                                              01/29/2021 17:32:43 PAGE 14  
+
+ 796   1          //0x06 id code register
+ 797   1          //0x3F USID register, read only
+ 798   1          //0x36 key data, 16 bytes
+ 799   1          //0x3D FCB register,4 bytes
+ 800   1      
+ 801   1          for (i=0x01; i<=0x04; i++)
+ 802   1            A7137_WriteReg(i, A7137Config[i]);
+ 803   1      
+ 804   1        for (i=0x07; i<=0x29; i++)
+ 805   1          A7137_WriteReg(i, A7137Config[i]);
+ 806   1      
+ 807   1        for (i=0; i<=7; i++)//0x2A DAS
+ 808   1          A7137_WriteReg_Page(0x2A, A7137_Addr2A_Config[i], i);
+ 809   1      
+ 810   1        for (i=0x2B; i<=0x35; i++)
+ 811   1          A7137_WriteReg(i, A7137Config[i]);
+ 812   1      
+ 813   1        A7137_WriteReg(0x37, A7137Config[0x37]);
+ 814   1      
+ 815   1        for (i=0; i<=4; i++)//0x38 ROM
+ 816   1          A7137_WriteReg_Page(0x38, A7137_Addr38_Config[i], i);
+ 817   1      
+ 818   1        for (i=0x39; i<=0x3C; i++)
+ 819   1          A7137_WriteReg(i, A7137Config[i]);
+ 820   1      
+ 821   1        A7137_WriteReg(0x3E, A7137Config[0x3E]);
+ 822   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1743    ----
+   CONSTANT SIZE    =    179    ----
+   XDATA SIZE       =    130    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     23      23
+   IDATA SIZE       =     13    ----
+   BIT SIZE         =      2    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

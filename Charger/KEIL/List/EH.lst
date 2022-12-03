@@ -1,0 +1,588 @@
+C51 COMPILER V9.60.0.0   EH                                                                09/14/2021 14:45:46 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE EH
+OBJECT MODULE PLACED IN .\Output\EH.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE ..\EH.c OPTIMIZE(7,SPEED) BROWSE INCDIR(..\Library\Device\Include;..\Lib
+                    -rary\StdDriver\inc) DEBUG OBJECTEXTEND PRINT(.\List\EH.lst) TABS(2) OBJECT(.\Output\EH.obj)
+
+line level    source
+
+   1          
+   2          #include "ML51.H" 
+   3          
+   4          #define Sint8  signed   char
+   5          #define Uint8  unsigned char
+   6          #define Uint16 unsigned int
+   7          #define Uint32 unsigned long
+   8          unsigned int xdata ADCdataAIN;
+   9                   int VREF=5;       
+  10          /*********************************************************************
+  11          ** Define address
+  12          *********************************************************************/
+  13          //TC72
+  14          #define Adr_R               0x00
+  15          #define Adr_W               0x80
+  16          #define Adr_TMSB            0x02
+  17          #define Adr_TLSB            0x01
+  18          #define Shotdown            0x05
+  19          #define OneShot             0x15
+  20          /*********************************************************************
+  21          **  I/O Declaration
+  22          *********************************************************************/
+  23          //thermal
+  24          #define PWM     P15     
+  25          #define SCK     P31     
+  26          #define SCS1    P24     
+  27          #define SDIO    P30     
+  28          #define SCS2    P20     
+  29          #define SDI     P25
+  30          #define SCS3    P23
+  31          //power allocate
+  32          #define ADC     P21
+  33          #define TURN    P14
+  34          #define EN      P22
+  35          //LCD
+  36          #define SDIN    P00
+  37          #define SCLK    P01
+  38          #define DC      P02
+  39          #define RES     P03
+  40          #define CS      P52
+  41          
+  42          //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+  43          //  Global Variables
+  44          //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+  45          #define XLevelL   0x00
+  46          #define XLevelH   0x10
+  47          #define XLevel    ((XLevelH&0x0F)*16+XLevelL)
+  48          #define Max_Column  128
+  49          #define Max_Row   64
+  50          #define Brightness  0xBF
+  51          /*********************************************************************
+  52          **  LCD pattern display
+  53          *********************************************************************/
+  54          unsigned char code LCD_basic[][19]={
+C51 COMPILER V9.60.0.0   EH                                                                09/14/2021 14:45:46 PAGE 2   
+
+  55            0x00,0x00,0x7E,0x11,0x11,0x11,0x7E,0x00,0x01,0x01,0x7F,0x01,0x01,0x00,0x00,0x36,0x36,0x00,0x00,
+  56            0x00,0x00,0x01,0x01,0x7F,0x01,0x01,0x00,0x7F,0x08,0x08,0x08,0x7F,0x00,0x00,0x36,0x36,0x00,0x00,
+  57            0x00,0x00,0x01,0x01,0x7F,0x01,0x01,0x00,0x3E,0x41,0x41,0x41,0x22,0x00,0x00,0x36,0x36,0x00,0x00,
+  58            0x00,0x60,0x58,0x46,0x43,0x46,0x58,0x60,0x01,0x01,0x7F,0x01,0x01,0x00,0x00,0x36,0x36,0x00,0x00,
+  59          };
+  60          unsigned char code Watt_basic[][6]={
+  61            0x7E,0x11,0x11,0x11,0x7E,0x00,//A
+  62            0x7C,0x04,0x18,0x04,0x7C,0x00,//m
+  63            0x7C,0x14,0x14,0x14,0x08,0x00,//p
+  64            0x00,0x36,0x36,0x00,0x00,0x00,//:
+  65            0x7F,0x49,0x49,0x49,0x41,0x00,//E
+  66            0x7F,0x08,0x08,0x08,0x7F,0x00,//H
+  67            0x00,0x00,0x00,0x00,0x00,0x00,//space
+  68            0x3F,0x40,0x38,0x40,0x3F,0x00,//W
+  69            0x20,0x54,0x54,0x54,0x78,0x00,//a
+  70            0x04,0x3F,0x44,0x40,0x20,0x00,//t
+  71            0x04,0x3F,0x44,0x40,0x20,0x00,//t
+  72            0x00,0x36,0x36,0x00,0x00,0x00,//:
+  73            0x38,0x44,0x44,0x44,0x20,0X00,//c
+  74            0x7F,0x08,0x04,0x04,0x78,0x00,//h
+  75            0x20,0x54,0x54,0x54,0x78,0x00,//a
+  76            0x7C,0x08,0x04,0x04,0x08,0x00,//r
+  77            0x38,0x44,0x44,0x44,0xF8,0x00,//g
+  78            0x38,0x54,0x54,0x54,0x18,0x00,//e
+  79            0x38,0x44,0x44,0x48,0x7F,0x00,//d
+  80            0x00,0x36,0x36,0x00,0x00,0x00,//:
+  81            0x01,0x02,0x02,0x02,0x01,0x00,//g con
+  82          };
+  83          unsigned char code Watt_unit[][6]={
+  84            0x7C,0x04,0x18,0x04,0x7C,0x00,//m
+  85            0x7E,0x11,0x11,0x11,0x7E,0x00,//A
+  86            0x7E,0x05,0x18,0x04,0x7C,0x00,//m+g
+  87            0x7E,0x11,0x11,0x11,0x7E,0x00,//A
+  88            0x7F,0x08,0x04,0x04,0x78,0x00,//h
+  89            0x7C,0x04,0x18,0x04,0x7C,0x00,//m 
+  90            0x3F,0x40,0x38,0x40,0x3F,0x00,//W
+  91            0x01,0x02,0x02,0x02,0x01,0x00,
+  92            0x07,0x05,0x07,0x00,0x3E,0x41,//oC
+  93            0x41,0x41,0x22,0x00,0x00,0x00,
+  94          };
+  95          unsigned char code number[][5]={
+  96            {0x3E,0x51,0x49,0x45,0x3E},   //   ( 16)  0 - 0x0030 Digit Zero
+  97            {0x00,0x42,0x7F,0x40,0x00},   //   ( 17)  1 - 0x0031 Digit One
+  98            {0x42,0x61,0x51,0x49,0x46},   //   ( 18)  2 - 0x0032 Digit Two
+  99            {0x21,0x41,0x45,0x4B,0x31},   //   ( 19)  3 - 0x0033 Digit Three
+ 100            {0x18,0x14,0x12,0x7F,0x10},   //   ( 20)  4 - 0x0034 Digit Four
+ 101            {0x27,0x45,0x45,0x45,0x39},   //   ( 21)  5 - 0x0035 Digit Five
+ 102            {0x3C,0x4A,0x49,0x49,0x30},   //   ( 22)  6 - 0x0036 Digit Six
+ 103            {0x01,0x71,0x09,0x05,0x03},   //   ( 23)  7 - 0x0037 Digit Seven
+ 104            {0x36,0x49,0x49,0x49,0x36},   //   ( 24)  8 - 0x0038 Digit Eight
+ 105            {0x06,0x49,0x49,0x29,0x1E},   //   ( 25)  9 - 0x0039 Dight Nine
+ 106            {0x00,0x60,0x60,0x00,0x00},   //   ( 14)  . - 0x002E Full Stop
+ 107            {0x00,0x00,0x00,0x00,0x00},
+ 108          };
+ 109          /*********************************************************************
+ 110          **  Variable Declaration
+ 111          *********************************************************************/
+ 112          Uint16 i;//for first  loop counting
+ 113          Uint16 j;//for second loop counting
+ 114          unsigned char idata *Src_Pointer;//retrieve pointer dataa
+ 115          
+ 116          //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+C51 COMPILER V9.60.0.0   EH                                                                09/14/2021 14:45:46 PAGE 3   
+
+ 117          //  Delay Time
+ 118          //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ 119          void uDelay(unsigned char l)
+ 120          {
+ 121   1        while(l--);
+ 122   1      }
+ 123          
+ 124          
+ 125          void Delay(unsigned char n)
+ 126          {
+ 127   1      unsigned char i,j,k;
+ 128   1      
+ 129   1        for(k=0;k<n;k++)
+ 130   1        {
+ 131   2          for(i=0;i<131;i++)
+ 132   2          {
+ 133   3            for(j=0;j<15;j++)
+ 134   3            {
+ 135   4              uDelay(203);  
+ 136   4            }
+ 137   3          }
+ 138   2        }
+ 139   1      }
+ 140          
+ 141          void    InitThermal(void);
+ 142          void    InitLCD(void);
+ 143          void    InitPin(void);
+ 144          float   I_detecting(void);
+ 145          void    ByteWrite(Uint8 src);
+ 146          Uint8   ByteRead(void);
+ 147          Uint16  Thermal_detecting(int select);
+ 148          Uint16  MaxRead(void);
+ 149          void    pwm_open(unsigned long u32SYSCLK, unsigned int u16CNT, unsigned int u16DLYUnit);
+ 150          void    Write_Command(unsigned char Data);
+ 151          void    Write_Data(unsigned char Data);
+ 152          void    OLED_Init(void);
+ 153          void    set_LCD_display(void);
+ 154          
+ 155          void main(){
+ 156   1          Uint16 T1,T2,T3;
+ 157   1          float ampere;
+ 158   1          //Initial
+ 159   1          InitPin();
+ 160   1          SFRS=0;
+ 161   1          
+ 162   1          //P30 P31 UART
+ 163   1          //Enable_UART0_VCOM_printf();
+ 164   1          //printf("turn on\n");
+ 165   1          //thermal detect turn=1
+ 166   1          
+ 167   1          //T1 = Thermal_detecting(1);
+ 168   1          //T2 = Thermal_detecting(2);
+ 169   1          //T3 = Thermal_detecting(3);
+ 170   1          //printf("T3-T1:%d\n",T3-T1);
+ 171   1          //pwm turn=1 on
+ 172   1          //pwm_open(24000000,5,1000);
+ 173   1          /*
+ 174   1          if((T3-T1)>5){
+ 175   1            PWM=1;
+ 176   1          }
+ 177   1          */
+ 178   1          //current detecting
+C51 COMPILER V9.60.0.0   EH                                                                09/14/2021 14:45:46 PAGE 4   
+
+ 179   1          //ampere=I_detecting();
+ 180   1          
+ 181   1          SFRS=0;
+ 182   1          T1=128;
+ 183   1          T2=60;
+ 184   1          T3=25;
+ 185   1          ampere=100.2;
+ 186   1          //LCD display EN=1 on 
+ 187   1          TURN=1;
+ 188   1          OLED_Init();
+ 189   1          Delay(1);
+ 190   1          EN=1;
+ 191   1          while(1)
+ 192   1          {
+ 193   2            set_LCD_display();
+ 194   2            Delay(10);
+ 195   2            //Clear Screen
+ 196   2            for(i=0;i<8;i++)
+ 197   2            {
+ 198   3              Write_Command(0xB0|i);
+ 199   3              Write_Command(0x00);
+ 200   3              Write_Command(0x10);        
+ 201   3              for(j=0;j<128;j++)
+ 202   3              {
+ 203   4                Write_Data(0x00);
+ 204   4              }
+ 205   3            }
+ 206   2            //fade out
+ 207   2            for(i=(Brightness+1);i>0;i--)
+ 208   2            {
+ 209   3              Write_Command(0x81);        
+ 210   3              Write_Command(i-1);
+ 211   3              uDelay(200);
+ 212   3              uDelay(200);
+ 213   3              uDelay(200);
+ 214   3            }
+ 215   2            Write_Command(0xAE);//Set_Display_Off
+ 216   2          }
+ 217   1      }
+ 218          
+ 219          void InitThermal(){
+ 220   1          //PWM,SCK,SCS1,SDIO,
+ 221   1          //SCS2,SCS3,SDI 
+ 222   1          MFP_P15_GPIO,MFP_P31_GPIO,MFP_P24_GPIO,MFP_P30_GPIO,
+ 223   1          MFP_P20_GPIO,MFP_P23_GPIO,MFP_P25_GPIO;
+ 224   1          //QUASI_MODE
+ 225   1          P15_QUASI_MODE,P31_QUASI_MODE,P24_QUASI_MODE,P30_QUASI_MODE,
+ 226   1          P20_QUASI_MODE,P23_QUASI_MODE,P25_QUASI_MODE;
+ 227   1      }
+ 228          void InitLCD(){
+ 229   1          //SDIN,SCLK,DC,RES,CS QUASI mode
+ 230   1          MFP_P00_GPIO,MFP_P01_GPIO,MFP_P03_GPIO,MFP_P52_GPIO;
+ 231   1          P00_QUASI_MODE,P01_QUASI_MODE,P03_QUASI_MODE,P52_QUASI_MODE;
+ 232   1          //P02(DC) QUASI mode
+ 233   1          SFRS = 1;
+ 234   1          P0M1 &= ~BIT2;
+ 235   1          P0M2 &= ~BIT2;
+ 236   1      }
+ 237          void InitPin(){
+ 238   1          //ADC
+ 239   1          ENABLE_ADC_CH4;
+ 240   1          //single
+C51 COMPILER V9.60.0.0   EH                                                                09/14/2021 14:45:46 PAGE 5   
+
+ 241   1          SFRS=0;
+ 242   1          ADCCON1&=0xEF; 
+ 243   1          //sampling time
+ 244   1          SFRS=0;
+ 245   1          ADCSR &= 0x8F;
+ 246   1          ADCSR |= 0x30;//ADCDIV=Fsys/8
+ 247   1          ADCCON2&=0xF1;
+ 248   1          ADCCON2|=(0x07)<<1;
+ 249   1          
+ 250   1          //TURN,EN
+ 251   1          MFP_P14_GPIO,MFP_P22_GPIO;
+ 252   1          P14_QUASI_MODE,P22_QUASI_MODE;
+ 253   1          //Thermal,LCD
+ 254   1          InitThermal();
+ 255   1          InitLCD();
+ 256   1      }
+ 257          
+ 258          /*
+ 259          float I_detecting(void){
+ 260              float amp=0;
+ 261          
+ 262              clr_ADCCON0_ADCF;
+ 263              set_ADCCON0_ADCS;                  // ADC start trig signal
+ 264              while(!(ADCCON0&SET_BIT7));        // bit7==ADCF
+ 265              ADCdataAIN = (ADCRH<<4)|ADCRL;
+ 266          
+ 267              printf ("\n ADC result = 0x%X",ADCdataAIN);
+ 268              
+ 269              amp=ADCdataAIN;
+ 270              printf ("ampere = %f ",amp);
+ 271              amp=(amp*VREF)/4095;
+ 272              printf ("ampere = %f mA",amp);
+ 273              
+ 274              return amp;
+ 275          }
+ 276          */
+ 277          /*******************************thermal detecting*************************************/
+ 278          Uint16 Thermal_detecting(int select){
+ 279   1          //select CS turn on
+ 280   1          Uint16 temp=0x00;
+ 281   1          switch(select){
+ 282   2            case 1:
+ 283   2              SCS1=0;//MAX6675 T1
+ 284   2              temp=MaxRead();
+ 285   2              printf("T1 data:%x\n");
+ 286   2              //return temp;
+ 287   2              break;
+ 288   2            case 2:
+ 289   2              SCS2=0;//MAX6675 T2
+ 290   2              temp=MaxRead();
+ 291   2              printf("T2 data:%x\n");
+ 292   2              //return temp;
+ 293   2              break;
+ 294   2            case 3:
+ 295   2              SCS3=1;//TC72
+ 296   2              //write mode//
+ 297   2              ByteWrite(Adr_W);
+ 298   2              ByteWrite(OneShot);
+ 299   2              //read temp//
+ 300   2              _nop_();
+ 301   2              ByteWrite(Adr_TMSB);
+ 302   2              temp=ByteRead();
+C51 COMPILER V9.60.0.0   EH                                                                09/14/2021 14:45:46 PAGE 6   
+
+ 303   2              printf("Room data:%x\n");
+ 304   2              //return temp;
+ 305   2              break;
+ 306   2            default:
+ 307   2              break;
+ 308   2          }
+ 309   1          //all turn off
+ 310   1          SCS3=0,SCS1=1,SCS2=1;
+ 311   1          return temp;
+ 312   1      }
+ 313          void ByteWrite(Uint8 src){
+ 314   1      //    Uint8 i;
+ 315   1            SCK=0;
+ 316   1            for (i = 0; i < 8; i++)
+ 317   1            {
+ 318   2                SDI =(src & 0x80)>>7;             
+ 319   2                _nop_();
+ 320   2                SCK = 1;
+ 321   2                _nop_();
+ 322   2                SCK = 0;
+ 323   2                src = src << 1;
+ 324   2            }
+ 325   1      }
+ 326          Uint8 ByteRead(void)
+ 327          {
+ 328   1      //  Uint8 i;
+ 329   1          Uint8 tmp;
+ 330   1      
+ 331   1          SDIO = 1; //sdio pull high
+ 332   1      
+ 333   1          for (i = 0; i < 8; i++)
+ 334   1          {
+ 335   2              SCK = 1;
+ 336   2              if (SDIO)
+ 337   2                  tmp = (tmp << 1) | 0x01;
+ 338   2              else
+ 339   2                  tmp = tmp << 1;
+ 340   2              _nop_();
+ 341   2              SCK = 0;
+ 342   2              _nop_();
+ 343   2          }
+ 344   1      
+ 345   1          return tmp;
+ 346   1      }
+ 347          Uint16 MaxRead(void){
+ 348   1      //  Uint16 i;
+ 349   1          Uint16 tmp;
+ 350   1          //falling edge of clock 
+ 351   1          for (i = 0; i < 16; i++)
+ 352   1          {
+ 353   2              SCK = 0;
+ 354   2              if (SDIO)
+ 355   2                  tmp = (tmp << 1) | 0x01;
+ 356   2              else
+ 357   2                  tmp = tmp << 1;
+ 358   2              _nop_();
+ 359   2              SCK = 1;
+ 360   2              _nop_();
+ 361   2          }
+ 362   1          return tmp;
+ 363   1      }
+ 364          /*************************************pwm fan****************************************/
+C51 COMPILER V9.60.0.0   EH                                                                09/14/2021 14:45:46 PAGE 7   
+
+ 365          void pwm_open(unsigned long u32SYSCLK, unsigned int u16CNT, unsigned int u16DLYUnit){
+ 366   1        
+ 367   1          unsigned char TL0TMP, TH0TMP;
+ 368   1          int TQ=0;
+ 369   1          SFRS = 0;
+ 370   1          TIMER0_FSYS_DIV12;                                      //T0M=0, Timer0 Clock = Fsys/12
+ 371   1          ENABLE_TIMER0_MODE1;                                      //Timer0 is 16-bit mode
+ 372   1          TL0TMP = LOBYTE(65535-((u32SYSCLK/1000000)*u16DLYUnit/12)); //FFFF-24*1000/12=FFFF-7D0
+ 373   1          TH0TMP = HIBYTE(65535-((u32SYSCLK/1000000)*u16DLYUnit/12));
+ 374   1      
+ 375   1          while (u16CNT != 0)
+ 376   1          {
+ 377   2            TL0=TL0TMP;
+ 378   2            TH0=TH0TMP;
+ 379   2            set_TCON_TR0;                                    //Start Timer0 run control
+ 380   2            while (!TF0){
+ 381   3              TQ++;
+ 382   3            }//Check Timer0 Time-Out Flag
+ 383   2            printf("finish:%d\n",TQ);
+ 384   2            clr_TCON_TF0;
+ 385   2            clr_TCON_TR0;                       //Stop Timer0
+ 386   2            u16CNT --;
+ 387   2            TQ=0;
+ 388   2          }
+ 389   1          TL0 = 0; 
+ 390   1          TH0 = 0;
+ 391   1      }
+ 392          /*********************************LCD display************************************/
+ 393          void Write_Command(unsigned char Data)
+ 394          {
+ 395   1        unsigned char con;
+ 396   1        P5|=0xFB;//CS(P52)=0;
+ 397   1        DC=0;
+ 398   1        for (con=0; con<8; con++)
+ 399   1        {
+ 400   2          SCLK=0;//P1 & 0x80
+ 401   2          SDIN=(Data&0x80)>>7;
+ 402   2          Data = Data << 1;
+ 403   2          _nop_();
+ 404   2      //    uDelay(1);
+ 405   2          SCLK=1;
+ 406   2          _nop_();
+ 407   2      //    uDelay(1);
+ 408   2        }
+ 409   1        SCLK=0;
+ 410   1        DC=1;
+ 411   1        P5|=0x04;//CS(P52)=1;
+ 412   1      }
+ 413          
+ 414          
+ 415          void Write_Data(unsigned char Data)
+ 416          {
+ 417   1        unsigned char con;
+ 418   1      
+ 419   1        P5|=0xFB;//CS(P52)=0;
+ 420   1        DC=1;
+ 421   1        for (con=0;con<8;con++)
+ 422   1        {
+ 423   2          SCLK=0;
+ 424   2          SDIN=(Data&0x80)>>7;
+ 425   2          Data = Data << 1;
+ 426   2          _nop_();
+C51 COMPILER V9.60.0.0   EH                                                                09/14/2021 14:45:46 PAGE 8   
+
+ 427   2          SCLK=1;
+ 428   2          _nop_();
+ 429   2        }
+ 430   1        SCLK=0;
+ 431   1        DC=1;
+ 432   1        P5|=0x04;//CS(P52)=1;
+ 433   1      }
+ 434          
+ 435          void OLED_Init(void)
+ 436          {
+ 437   1      unsigned char i;
+ 438   1      
+ 439   1        RES=0;
+ 440   1        for(i=0;i<200;i++)
+ 441   1        {
+ 442   2          uDelay(200);
+ 443   2        }
+ 444   1        RES=1;
+ 445   1      
+ 446   1         Write_Command(0xae); /* set  display off */   
+ 447   1         Write_Command(0x00);    
+ 448   1         Write_Command(0x10);
+ 449   1         Write_Command(0xD5); /* set  lower column start address */
+ 450   1         Write_Command(0xA0); /* set  higher column start address */  
+ 451   1         Write_Command(0xA8); /* set  display start line */   
+ 452   1         Write_Command(0x3F);   
+ 453   1         Write_Command(0xD3); /* set  contrast control */
+ 454   1         Write_Command(0x00);    
+ 455   1         Write_Command(0x40);    
+ 456   1         Write_Command(0x00);   
+ 457   1         Write_Command(0x20); /* set  segment remap  */  
+ 458   1         Write_Command(0x02); /* set  normal display */   
+ 459   1         Write_Command(0xa1); /* set  multiplex ratio */
+ 460   1         Write_Command(0xC8); /* 1/64 */   
+ 461   1         Write_Command(0xDA); /* master configuration */
+ 462   1         Write_Command(0x12); /* external vcc supply */  
+ 463   1         Write_Command(0xc8); /* set  com scan direction */  
+ 464   1         Write_Command(0xd3); /* set  display offset  */
+ 465   1         Write_Command(0x40);   
+ 466   1         Write_Command(0x81); /* set  display clock divide/oscillator frequency */
+ 467   1         Write_Command(0xBF);    
+ 468   1         Write_Command(0xD9);    /*set area color mode off */
+ 469   1         Write_Command(0x25);       
+ 470   1         Write_Command(0xA4);
+ 471   1         Write_Command(0xA6);    
+ 472   1         Write_Command(0xaf); /* set  display on */
+ 473   1      }
+ 474          
+ 475          void set_LCD_display(void){
+ 476   1        //FADE_IN
+ 477   1        Write_Command(0xAF);//Set_Display_On
+ 478   1        for(i=0;i<(0xBF+1);i++)
+ 479   1        {
+ 480   2          Write_Command(0x81);        
+ 481   2          Write_Command(i);
+ 482   2          uDelay(200);
+ 483   2          uDelay(200);
+ 484   2          uDelay(200);
+ 485   2        }
+ 486   1        //fill_ram
+ 487   1        for(i=0;i<8;i++)
+ 488   1        {
+C51 COMPILER V9.60.0.0   EH                                                                09/14/2021 14:45:46 PAGE 9   
+
+ 489   2          //Instruction_Setting('I',i,0x00);//Set_Start_Page(i);
+ 490   2          Write_Command(0xB0|i);
+ 491   2          //Instruction_Setting('A',0x00,0x00);//Set_Start_Column(0x00);
+ 492   2          Write_Command(0x00);
+ 493   2          Write_Command(0x10);
+ 494   2          
+ 495   2          for(j=0;j<128;j++)
+ 496   2          {
+ 497   3            Write_Data(0xFF);
+ 498   3          }
+ 499   2        }
+ 500   1        Delay(5);
+ 501   1        //clear screen
+ 502   1        for(i=0;i<8;i++)
+ 503   1        {
+ 504   2          //Instruction_Setting('I',i,0x00);//Set_Start_Page(i);
+ 505   2          Write_Command(0xB0|i);
+ 506   2          //Instruction_Setting('A',0x00,0x00);//Set_Start_Column(0x00);
+ 507   2          Write_Command(0x00);
+ 508   2          Write_Command(0x10);
+ 509   2          
+ 510   2          for(j=0;j<128;j++)
+ 511   2          {
+ 512   3            Write_Data(0x00);
+ 513   3          }
+ 514   2        }
+ 515   1        Delay(5);
+ 516   1        //Frame
+ 517   1        Write_Command(0xB0|0x00); 
+ 518   1        Write_Command(0x00);
+ 519   1        Write_Command(0x10);
+ 520   1        for(i=0;i<Max_Column;i++)
+ 521   1        {
+ 522   2          Write_Data(0x01);
+ 523   2        }
+ 524   1        Write_Command(0xB0|0x07); 
+ 525   1        Write_Command(0x00);
+ 526   1        Write_Command(0x10);
+ 527   1        for(i=0;i<Max_Column;i++)
+ 528   1        {
+ 529   2          Write_Data(0x80);
+ 530   2        }
+ 531   1        for(i=0;i<8;i++)
+ 532   1        {
+ 533   2          //Instruction_Setting('I',i,0x00);//Set_Start_Page(i);
+ 534   2          Write_Command(0xB0|i);    
+ 535   2          for(j=0;j<Max_Column;j+=(Max_Column-1))
+ 536   2          {
+ 537   3            //Instruction_Setting('A',XLevel+j,0x00);//Set_Start_Column(XLevel+j);
+ 538   3            Write_Command(0x00+(XLevel+j)%16);
+ 539   3            Write_Command(0x10+(XLevel+j)/16);
+ 540   3            Write_Data(0xFF);
+ 541   3          }
+ 542   2        }
+ 543   1      }
+ 544          
+ 545          
+ 546          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1622    ----
+C51 COMPILER V9.60.0.0   EH                                                                09/14/2021 14:45:46 PAGE 10  
+
+   CONSTANT SIZE    =    371    ----
+   XDATA SIZE       =      2    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      7      24
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
